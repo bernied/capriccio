@@ -4,6 +4,11 @@ This file is intended to help track internal changes to the library.
 Latest changes should be added to the top of the file.
 ----------------------------------------------------------------------
 
+2004/03/29 - zf
+  * read_proc_file() is using close() to close the proc file
+    Because it is called from the scheduler, it should use the
+    SYS_close syscall directly.
+
 2003/08/11 - zf
   * Fastpath improvement for buffer-cache hitting disk requests
   
