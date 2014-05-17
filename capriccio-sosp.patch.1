@@ -1,0 +1,36 @@
+Binary files capriccio/src/apps/client/mclient and capriccio.new/src/apps/client/mclient differ
+Binary files capriccio/src/apps/client/mpclient and capriccio.new/src/apps/client/mpclient differ
+diff -ruN capriccio/src/CHANGES capriccio.new/src/CHANGES
+--- capriccio/src/CHANGES	2003-08-16 02:37:05.000000000 -0700
++++ capriccio.new/src/CHANGES	2004-03-29 14:25:20.000000000 -0800
+@@ -4,6 +4,11 @@
+ Latest changes should be added to the top of the file.
+ ----------------------------------------------------------------------
+ 
++2004/03/29 - zf
++  * read_proc_file() is using close() to close the proc file
++    Because it is called from the scheduler, it should use the
++    SYS_close syscall directly.
++
+ 2003/08/11 - zf
+   * Fastpath improvement for buffer-cache hitting disk requests
+   
+diff -ruN capriccio/src/threads/readproc.c capriccio.new/src/threads/readproc.c
+--- capriccio/src/threads/readproc.c	2003-08-18 04:41:23.000000000 -0700
++++ capriccio.new/src/threads/readproc.c	2004-03-29 14:23:00.000000000 -0800
+@@ -47,13 +47,13 @@
+     }  */
+   ret = syscall(SYS_read, fd, buf, len);
+   // FIXME: fd caching seems to flake out someitmes - why??
+-  close(fd);
++  syscall(SYS_close, fd);
+   *fdp = -1;
+ #endif
+ 
+   if( ret < 50 ) {
+     warning("too little data in %s (%d bytes)\n",name,ret);
+-    if( fd >= 0 ) close(fd);
++    if( fd >= 0 ) syscall(SYS_close, fd);
+     *fdp = -1;
+     return -1;
+   }
