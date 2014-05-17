@@ -1,17 +1,25 @@
+> [Capriccio](http://capriccio.cs.berkeley.edu/index.html) was a project at Berkeley whose goal was to create a high performance systems software library, while keeping the programming model simple. This was done through 3 techniques:
+>
+>1.  Cooperative threading (via coroutines)
+>2.  Dynamic stack sizing
+>3.  Dynamic scheduling based on the blocking graph
+>
+> This project seems to have ended in 2004. But there are some interesting papers in the [papers folder](https://github.com/bernied/capriccio/tree/master/papers).
+>
+> What follows is the readme from the currently available [download](http://capriccio.cs.berkeley.edu/downloads.html). These files have not been ported or upgraded. They are here for historical purposes. I have no personal stake in the project, other then I thnk its cool.
 
 
-1.  Introduction
+## Introduction
 
-This is the Capriccio source code repository for the SOSP 2003
+This is the Capriccio source code repository for the [SOSP 2003](http://www.cs.rochester.edu/meetings/sosp2003/)
 conference CD.  This file contains basic instructions on getting
 started with Capriccio.  For more detailed documentation, and for
 updated source code, please visit our web site:
 
-    http://capriccio.cs.berkeley.edu/
+  [http://capriccio.cs.berkeley.edu/](http://capriccio.cs.berkeley.edu/)
 
 
-
-2.  Getting Started
+## Getting Started
 
 To build Capriccio, simply copy "Make.opts.sample" to "Make.opts", and
 edit appropriately.  There are a number of comments in the file that
@@ -20,7 +28,7 @@ work for a vanilla Linux 2.4 kernel.  To build, simply type "make" in
 this directory.
 
 
-3.  Building applications
+##  Building applications
 
 To build your own applications against Capriccio, simply link against
 the static "lib/libpthread.a" library.  For examples, see the Makefiles
@@ -49,7 +57,7 @@ While applications will probably still run, one user-level thread
 doing IO may end up blocking all others.
 
 
-4.  Runtime options
+##  Runtime options
 
 Capriccio includes a number of parameters that can be chosen at
 runtime, including the asynchronous IO mechanisms and the scheduling
@@ -57,7 +65,7 @@ algorithm.  These are controlled through environment variables.  For a
 list of which environment variables are available, see util/config.c.  
 
 
-5.  Caveats
+##  Caveats
 
 The source code in this CD is a snapshot of our working development
 repository, and as such, not all things are working.  For example,
@@ -73,4 +81,7 @@ Best regards,
 
 -Rob von Behren
  August 17, 2003
+ 
+ `Last edited 2014-05-17`
+ 
 
