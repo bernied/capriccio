@@ -1,0 +1,370 @@
+
+----------------------------------------------------------------------
+This file is intended to help track internal changes to the library.
+Latest changes should be added to the top of the file.
+----------------------------------------------------------------------
+
+2003/08/11 - zf
+  * Fastpath improvement for buffer-cache hitting disk requests
+  
+2003/08/09 - zf
+  * New eepoll patch for 2.6.0-test2-bk8
+
+2003/08/07 - zf
+  * Reformatted micro-benchmark results
+  * Save errno in thread stack to avoid conflict with NPTL
+  * Reduced I/O polling rate
+  * Added group submit for nio. Default batch factor is 32.
+    Tunable by IOQ_DEPTH_MAX in nio.c
+
+2003/08/01 - zf
+  * Added pipe scalability benchmark at src/bench/pipetest_thread.
+
+2003/07/30 - jrvb
+  * Added util/config.[ch], to clean up runtime options
+  * Made several compile-time options to runtime options 
+
+2003/07/28 - zf
+  * Added new concurrent I/O benchmark p_bench_concurrent_io.c
+
+2003/07/25 - jrvb
+  * Changed init code in a number of places to use gcc's
+    __attribute__((constructor)).  This is much more reliable than
+    trying to do things by hand.  NOTE: in a few cases, things are
+    still done by hand, eg. where order matters.
+  * added diskio_immediate.c, to do immediate, blocking disk IO.  
+
+2003/07/24 - zf
+  * Pipe benchmark in bench/p_bench_pipe.c
+
+2003/07/23 - jrvb
+  * added some crude support for dynamic linking of libpthread.so to aio/Makefile  
+
+2003/07/22 - jrvb
+  * tweak Makefile in bench to kill orphaned capriccio kernel threads
+  * fixed program name in bench/test_readdir.c
+
+2003/07/21 - zf
+  * automate benchmarking process of bench/ 
+  * cosmetic changes to SYS_SET_SYSCALL (gcc 3.3+ complaining about 
+    assigning const var to non-const)
+  * nptl benchmarking
+  * nptl build notes in doc/
+
+2003/07/19 - zf
+  * numerous signal fixes
+  * signal test cases in bench/
+  * apache now runs with no patching at all!
+    ("-D DEBUG" command line argument still needed)
+
+2003/07/15 - zf
+  * (untested) full signal implementation in signal.c
+  * fixed bug that stops pthread_exit() from exiting the main thread
+  * now we pass most of test cases in bench/.  several we cannot do
+    are either because we are cooperative or we do not have support some
+    optional functionalities.
+
+2003/07/11 - zf
+  * __errno_location() now returns a thread-local error number instead
+    of a global one
+    
+  * (untested) new select() wrapper in nio.c (not in default build)
+  
+  * Apache now works with nio (with Rob's configure command line and
+    a slightly modified apache patch(in cvs))
+
+2003/07/09 - zf
+  * Extended epoll kernel patch in kernel/patches/eepoll-2.5.70.diff
+    It's applicable to kernel 2.5.70 (or up hopefully)
+
+2003/07/08 - zf
+  * checked in i/o wrapping code using the extended epoll kernel interface
+    Code is in nio/ and not used by default.  Add 'USE_IO_LIB=nio' to
+    Make.opts to use it instead of the aio/ code.
+    ( This is still preliminary and overlaps with the aio/ code.  
+      It should be merged with aio/ code later.)
+
+  * added CAP_NODEBUG env. var to disable debug messages at runtime.
+
+  * added tests and benchmarks in bench, mainly taken from MIT pthread
+
+2003/06/18 - jrvb
+  * checked in initial (not tested) support for send/recv and friends
+    to blocking_io.c
+
+2003/04/24 - jrvb
+  * switched util/occ_list.c to use spinlocks, instead of true
+    optomistic concurrency control.
+  * fixed kthread disk IO
+  * made diskio_kthread the default
+  * added more reporting to knot
+
+2003/04/19 - jrvb
+  * added line counts to makefiles
+
+2003/03/24 - jrvb
+  * have sockio_poll check IO first - faster w/ knot 
+
+2003/03/23 - zf
+  * fixes to assert()'s with side-effects.  the side-effects will not be
+    executed when asserts are disable, causing potential bugs
+
+2003/03/23 - jrvb
+  * bugfixes all over the place
+  * change timers, counters, etc to show diff b/w process time and
+    real time when perfctr is available
+  * insert yields in various places before IO calls, for better
+    blocking graph and to avoid long edges
+  * add tracking of which syscall we are in
+  * ugly hacks to avoid init races w/ perfctr and IO libs
+  * signal changes for better core dumps
+  * bugfixes to diskio_kthread
+  * many fixes to edge length tracking & stats gathering
+  * fixes & improvements to scheduling, including basic admission control
+
+2003/03/21 - jrvb
+  * cleanup of blocking graph code
+    - prepare for final integration w/ cil blocking graph
+    - reduce overhead through sampling
+  * fixes to cpu timing code & resource counting
+
+2003/03/21 - zf
+  * perfctr-based timing in timing.c, set USE_PERFCTR = 1 in Make.opts to
+    use.  Then kill -sigusr1 <pid> will print out timing info
+
+2003/03/19 - jrvb
+  * optomistic concurrency control list structures are working w/
+    diskio_kthread and linux clone()
+  * make IO regime runtime selectable via environment vars:
+       CAPRICCIO_SOCKIO and CAPRICCIO_DISKIO
+  * change current_usec() to current_usecs() - for some reason the
+    java programmer in me always wants the 's' from currentTimeMillis()
+  * modify polling behavior in scheduler
+    - if there are no active threads, allow sockio to block
+    - max block time == min sleep time for sleeping threads
+  * change src/aio/Makefile behavior - looks now for make variables
+    HAVE_AIO and HAVE_SYS_EPOLL.  These should be defined in src/Make.opts
+  * make debug selectable from w/in Make.opts.  See Make.opts.sample
+    for info.
+
+2003/03/18 - zf
+  * timing routines using rdtsc in util/timing.h
+    these can be used to measure our overhead of polling/scheduling
+
+2003/03/15 - zf
+  * updated apache patch - more signal ignoring
+  * fix poll() race bug - we may return wrong result and corrupt the poll list
+  * use backtrace_symbols() anyway because it gives us some function names
+    NOTE: -all-static is preventing backtrace_symbols from working, while -static
+    is ok.
+
+2003/03/15
+  * dump blocking graph w/ SIGUSR1
+  * added dummy signal functions
+    - use alt sig stack, so we don't hose ourselves (need to do this
+      for each process on an MP system)
+    - set default signal handlers
+  * fixed thread_usleep() to take long long to avoid overflow
+  * Makefile tweaks & reorg to better support compiling external progs
+    - added include & lib directories
+    - added dummy header files, to avoid getting libc-specific stuff
+      in the way
+  * makefile changes to support cil  
+
+2003/03/13
+  * added lifo scheduler
+  * added simple http client
+  * laughed about changelog timeskew....  
+  * misc. fixes & tweaks to knot
+  * add code to turn off nagle alg. in tcp
+
+
+2003/03/13 - zf
+  * mutex/cond variable timeout fixes
+  * fix one year time skew of change log file  ;-)
+
+2003/03/11 - jrvb
+  * fixed sec -> usec conversions (should be times 10^6, not 10^3)
+  * added nanosleep() hack to sockio_poll() (do similar for epoll?)
+  * simpler version of priority scheduling
+
+
+2003/03/10 - zf
+  * misc sleep queue fixes
+
+
+2003/03/10 - jrvb
+  * thread changes
+    - change some names: current -> current_thread, scheduler -> scheduler_thread
+  * aio changes
+    - make sockio_poll() try IO first before suspending
+    - make all sockets non-blocking on creation (in accept, connect & open)
+  * misc
+    - changed order of includes, so we don't get multiple pthreads libs.  
+
+
+2003/03/09 - jrvb
+  * aio changes
+    - removed ref to num_runnable_threads from blocking_io.c - should
+      be managed only to threadlib.c
+    - removed POLLOUT, POLLERR, POLLNVAL from requested events, as
+      they are ignored there, and always added to returned events
+      anyway.
+    - changed sockio_poll.c to do IO in polling thread, to better
+      handle lists of requests.  This is mainly useful for accept(),
+      so we get returns from as many accept calls as possible.  (still
+      need corresponding change in sockio_epoll.c)
+    - per-fdsruct locking of request lists
+  * thread changes
+    - moved savederrno out of thread_t, and into stack frame of thread_yield_internal()
+    - removed THREAD_ATTR_DEFAULT, which wasn't really used
+    - unified new_thread(), thread_spawn(), and thread_spawn_with_attr()
+    - fixed bug in timeout usage in mutex.c
+    - streamlined thread_yield_internal
+    - fixed stack dump to not call our IO
+    - moved stack dump IO out of signal handler
+    - changed stack dump signal to SIGUSR1 instead of SIGQUIT
+  * util changes
+    - added our own assert(), to avoid infinite loop b/w write() and assert()
+  * general
+    - streamline structures w/ bit fields
+
+
+2003/03/09 - zf
+  * complete the thread stack dump facility.  now it shows the state of each
+    thread and their current state
+  * add new API for coro to support thread stack dump, co_backtrace()
+  * for the thread stack dump thing, add a linked list of all threads (global 
+    variable threads) in threadlib.c
+
+  * add thread id (tid) for each thread to enhance readability of thread dump
+  * add generic "sleep queue" data structure to the scheduler
+  * sleep(), usleep(), pthread_cond_timedwait() implemented on sleep queue
+
+  * thread_suspend_self() now takes a timeout argument and returns FALSE if
+    timeout actually expires before anyone else resumes the thread.  this will
+    be used to implement all timeout related functionality
+
+  * add poll()/select() wrappers
+
+2003/03/08 - zf
+  * added rudimentary thread stack dump functionality for debugging:
+      kill -quit <pid>
+    will generate a thread stack dump to stderr
+  * dummy readv()/writev() mapping
+  * bypass our mapping when user wants O_NONBLOCK
+  * mutex fixes
+
+2003/03/07 - jrvb
+  * misc fixes to scheduling stuff
+  * more tests in apps/schedtest
+
+2003/03/06 - zf
+  * set correct return value for lseek()
+  * rewrite dup(), dup2() handling.  all dup'ed fds should have a single file
+    state (offset etc).  so now they are connected together by a linked list
+    and keep a single copy of state in one of them (root_fd).  
+    p.s.  I know, this is ugly.  But the "cleaner" way to keep a separate data 
+    structure for per-file state outside fdstruct_t requires too much change to
+    the data structure and how we handle fds.  So I reject it.
+
+2003/03/04 - jrvb
+  * misc bugfixes to new scheduling code 
+  * added graph-aware scheduler code
+  * added env-var option & signal handler to dump blocking graph on exit
+  * added basic test of batching scheduler
+
+2003/03/03 - jrvb
+  * clean up & abstract blocking graph functions, in preparation for
+    integration w/ CIL
+  * misc cleanup of thread lib, flags, etc.
+
+2003/03/02 - jrvb
+  * abstract scheduling functions to allow multiple schedulers
+
+2003/03/02 - zf
+  * src/aio/Makefile now outputs libcapriccio.a, which contains all needed 
+    static libraries in one archive.
+  * priliminary apache2 patch: src/apps/apache-2.0.44-capriccio.diff.
+    it compiles and runs, but everything but serving the default page is not 
+    working now.
+
+2003/02/26 - jrvb
+  * threadlib.c - don't deallocate main_thread in thread_exit(), since
+    it may be used again by exit functions (ie, for flushing files in STDIO)
+  * blocking_io.c - added set_nonblocking() function, and cleaned up accept()
+  * added stats about yield points in threadlib.c and node_stats.c
+  * removed last vestiges of threadlib.c interface from knot, in favor
+    of pthreads interface
+  * added Makefile targets for different thread libs to knot
+
+2003/02/24 - zf
+  * add a PRINT_STAT switch to node_stat.c, determining whether thread
+    yield stats are printed
+  * shared library makefile cleanup - now exports all symbols
+  * pthreads tests in aio/tests
+
+2003/02/20 - jrvb
+  * fixed sockio_epoll to work w/ list of outstanding requests
+  * added socketcall() args to iorequest_t
+
+2003/02/19 - jrvb
+  * added stats for all yield points, to examine graph nodes
+
+2003/02/18 - jrvb
+  * added latch macros to threadlib (for use in threadlib and aio)
+    - can't be held over blocking points
+    - not recursive
+    - w/ one CPU, an error if they are already locked
+  * used latches in mutex code, to fix multi-CPU races
+  * switched aio routines to latches, rather than mutexes
+  * cleaned up aiotest.c
+
+2003/02/18 - zf
+  * added thread_join()
+  * aiotest working again with async disk i/o
+
+2003/02/15 - zf
+  * basic pthread layer in place (needs debugging).  this results in the
+    following changes to threadlib API.  missing pthread API is tracked in 
+    TODO file
+  * added pthreadtest.c, 
+      make testpthread
+  * added pth-like thread attribute support
+    - new API thread_attr_of(), ... to manage attributes
+    - new API thread_spawn_with_attr() to create a thread with attribute
+  * added mutex implementation
+  * added rwlock
+  * added condition variable
+  * added key-based thread-specific storage
+
+2003/02/13 - jrvb
+  * traced aio/threads problems to stdio setbuf()
+  * updated debugging statements many places
+  * misc fixes to knot / aio
+
+2003/02/12 - jrvb
+  * change makefiles back to static linking
+  * update knot to new interfaces
+  * incorporate some runtime stats code
+
+2003/02/11 - jrvb
+  * added epoll support
+  * misc fixes & minor reorg of sockio_poll
+
+2003/02/08 - jrvb
+  * bugfixes in aio: make everything use syscall() that should 
+  * added aio/check_syscall to check for direct system call useage 
+  * added many new syscall wrappers to aio, including pread/pwrite
+
+2003/02/07 - jrvb
+  * made blocking_io.c:debug() printf-like, and moved to util/
+  * removed init_fdstruct(), since init is being done in get_fdstruct()
+  * fixed bugs in lseek() and get_fdstruct()
+  * moved thread_suspend_self() inside IO modules, to allow stack
+    allocation of module-specific request info
+  * changed diskio_aio.c to stack allocate diskio_cb structs
+  * appended "_t" to diskio_aio.c:diskio_cb struct name
+  * partial fix for fds not allocated locally 
+    - breaks for system(). 
+    - ultimately best to track all places that fds are created 

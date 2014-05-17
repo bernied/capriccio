@@ -1,0 +1,266 @@
+diff -Naur orig/httpd-2.0.44/build/library.mk my/httpd-2.0.44/build/library.mk
+--- orig/httpd-2.0.44/build/library.mk	Wed Mar 13 12:47:40 2002
++++ my/httpd-2.0.44/build/library.mk	Sun Mar 16 13:37:36 2003
+@@ -57,4 +57,4 @@
+ LTLIBRARY_OBJECTS = $(LTLIBRARY_SOURCES:.c=.lo) $(LTLIBRARY_OBJECTS_X)
+ 
+ $(LTLIBRARY_NAME): $(LTLIBRARY_OBJECTS) $(LTLIBRARY_DEPENDENCIES)
+-	$(LINK) $(LTLIBRARY_LDFLAGS) $(LTLIBRARY_OBJECTS) $(LTLIBRARY_LIBADD)
++	$(AR) cr $@ $(LTLIBRARY_LDFLAGS) $(LTLIBRARY_OBJECTS) $(LTLIBRARY_LIBADD)
+diff -Naur orig/httpd-2.0.44/build/rules.mk.in my/httpd-2.0.44/build/rules.mk.in
+--- orig/httpd-2.0.44/build/rules.mk.in	Sat Jun 15 14:48:53 2002
++++ my/httpd-2.0.44/build/rules.mk.in	Sun Mar 16 13:37:36 2003
+@@ -73,17 +73,24 @@
+ COMPILE      = $(CC)  $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(ALL_INCLUDES)
+ CXX_COMPILE  = $(CXX) $(ALL_CXXFLAGS) $(ALL_CPPFLAGS) $(ALL_INCLUDES)
+ 
+-SH_COMPILE     = $(LIBTOOL) --mode=compile $(COMPILE) @SHLTCFLAGS@ -c $< && touch $@
+-SH_CXX_COMPILE = $(LIBTOOL) --mode=compile $(CXX_COMPILE) @SHLTCFLAGS@ -c $< && touch $@
+-
+-LT_COMPILE     = $(LIBTOOL) --mode=compile $(COMPILE) @LTCFLAGS@ -c $< && touch $@
+-LT_CXX_COMPILE = $(LIBTOOL) --mode=compile $(CXX_COMPILE) @LTCFLAGS@ -c $< && touch $@
++#SH_COMPILE     = $(LIBTOOL) --mode=compile $(COMPILE) @SHLTCFLAGS@ -c $< && touch $@
++#SH_CXX_COMPILE = $(LIBTOOL) --mode=compile $(CXX_COMPILE) @SHLTCFLAGS@ -c $< && touch $@
++SH_COMPILE     = false SH_COMPILE
++SH_CXX_COMPILE = false SH_CXX_COMPILE
++
++#LT_COMPILE     = $(LIBTOOL) --mode=compile $(COMPILE) @LTCFLAGS@ -c $< && touch $@
++#LT_CXX_COMPILE = $(LIBTOOL) --mode=compile $(CXX_COMPILE) @LTCFLAGS@ -c $< && touch $@
++LT_COMPILE     = $(COMPILE) -o $@ -c $<
++LT_CXX_COMPILE = false LT_CXX_COMPILE
+ 
+ # Link-related commands
+ 
+-LINK     = $(LIBTOOL) --mode=link $(COMPILE) $(LT_LDFLAGS) $(ALL_LDFLAGS) -o $@
+-SH_LINK  = $(SH_LIBTOOL) --mode=link $(COMPILE) $(LT_LDFLAGS) $(ALL_LDFLAGS) $(SH_LDFLAGS) $(CORE_IMPLIB) $(SH_LIBS) -o $@
+-MOD_LINK = $(LIBTOOL) --mode=link $(COMPILE) -module $(LT_LDFLAGS) $(ALL_LDFLAGS) -o $@
++#LINK     = $(LIBTOOL) --mode=link $(COMPILE) $(LT_LDFLAGS) $(ALL_LDFLAGS) -o $@
++#SH_LINK  = $(SH_LIBTOOL) --mode=link $(COMPILE) $(LT_LDFLAGS) $(ALL_LDFLAGS) $(SH_LDFLAGS) $(CORE_IMPLIB) $(SH_LIBS) -o $@
++#MOD_LINK = $(LIBTOOL) --mode=link $(COMPILE) -module $(LT_LDFLAGS) $(ALL_LDFLAGS) -o $@
++LINK     = $(LD) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(ALL_INCLUDES) $(LT_LDFLAGS) $(ALL_LDFLAGS) -o $@
++SH_LINK  = false SH_LINK
++MOD_LINK = $(AR) cr $@
+ 
+ # Cross compile commands
+ 
+@@ -183,7 +190,8 @@
+ 	fi
+ 
+ local-clean: x-local-clean
+-	rm -f *.o *.lo *.slo *.obj *.a *.la $(CLEAN_TARGETS) $(TARGETS)
++	rm -f *.o *.lo *.slo *.obj *.a *.la *.i *combcil.* ___extra_files \
++	    $(CLEAN_TARGETS) $(TARGETS)
+ 	rm -rf .libs
+ 
+ local-distclean: local-clean x-local-distclean
+diff -Naur orig/httpd-2.0.44/mymake my/httpd-2.0.44/mymake
+--- orig/httpd-2.0.44/mymake	Wed Dec 31 16:00:00 1969
++++ my/httpd-2.0.44/mymake	Sun Mar 16 13:37:55 2003
+@@ -0,0 +1,10 @@
++export CAP="/home/jcondit/capriccio/src"
++export CIL="/home/jcondit/cil-knot"
++export CILLY="$CAP/bin/cilly --merge --disallowDuplication"
++export PROGRAM_LDFLAGS="--analyzestack"
++export EXTRA_CFLAGS="-g -pthread"
++export CC="$CILLY"
++export AR="$CILLY --mode=AR"
++export LD="$CILLY"
++export RANLIB="echo"
++make -e all
+diff -Naur orig/httpd-2.0.44/server/Makefile.in my/httpd-2.0.44/server/Makefile.in
+--- orig/httpd-2.0.44/server/Makefile.in	Fri Dec  6 11:23:53 2002
++++ my/httpd-2.0.44/server/Makefile.in	Sun Mar 16 13:37:36 2003
+@@ -8,13 +8,14 @@
+ 
+ LTLIBRARY_NAME    = libmain.la
+ LTLIBRARY_SOURCES = \
+-    test_char.h \
+ 	config.c log.c main.c vhost.c util.c \
+ 	util_script.c util_md5.c util_cfgtree.c util_ebcdic.c util_time.c \
+ 	rfc1413.c connection.c listen.c \
+ 	mpm_common.c util_charset.c util_debug.c util_xml.c \
+ 	util_filter.c $(top_builddir)/server/exports.c buildmark.c \
+ 	scoreboard.c error_bucket.c protocol.c core.c request.c provider.c
++
++    #test_char.h
+ 
+ TARGETS = delete-exports $(LTLIBRARY_NAME) $(CORE_IMPLIB_FILE) export_vars.h httpd.exp
+ 
+diff -Naur orig/httpd-2.0.44/srclib/apr/Makefile.in my/httpd-2.0.44/srclib/apr/Makefile.in
+--- orig/httpd-2.0.44/srclib/apr/Makefile.in	Fri Oct 11 03:55:59 2002
++++ my/httpd-2.0.44/srclib/apr/Makefile.in	Sun Mar 16 13:37:36 2003
+@@ -73,21 +73,21 @@
+ 	if [ ! -d $(DESTDIR)$(libdir) ]; then \
+ 	    $(top_srcdir)/build/mkdir.sh $(DESTDIR)$(libdir); \
+ 	fi;
+-	$(LIBTOOL) --mode=install cp $(TARGET_LIB) $(DESTDIR)$(libdir)
+-	$(LIBTOOL) --mode=install cp apr.exp $(DESTDIR)$(libdir)
++	cp $(TARGET_LIB) $(DESTDIR)$(libdir)
++	cp apr.exp $(DESTDIR)$(libdir)
+ 	if [ ! -d $(DESTDIR)$(installbuilddir) ]; then \
+ 	   	$(top_srcdir)/build/mkdir.sh $(DESTDIR)$(installbuilddir); \
+ 	fi; 
+ 	if [ -f libtool ]; then \
+-		$(LIBTOOL) --mode=install cp libtool $(DESTDIR)$(installbuilddir); \
++		cp libtool $(DESTDIR)$(installbuilddir); \
+ 	fi;
+ 	if [ -f shlibtool ]; then \
+-		$(LIBTOOL) --mode=install cp shlibtool $(DESTDIR)$(installbuilddir); \
++		cp shlibtool $(DESTDIR)$(installbuilddir); \
+ 	fi;
+ 	if [ ! -d $(DESTDIR)$(bindir) ]; then \
+ 	    $(top_srcdir)/build/mkdir.sh $(DESTDIR)$(bindir); \
+ 	fi;
+-	$(LIBTOOL) --mode=install cp apr-config $(DESTDIR)$(bindir)
++	cp apr-config $(DESTDIR)$(bindir)
+ 	chmod 755 $(DESTDIR)$(bindir)/apr-config
+ 	@if [ $(INSTALL_SUBDIRS) != "none" ]; then \
+             for i in $(INSTALL_SUBDIRS); do \
+@@ -95,11 +95,19 @@
+ 	    done \
+ 	fi
+ 
++	#$(LIBTOOL) --mode=install cp $(TARGET_LIB) $(DESTDIR)$(libdir)
++	#$(LIBTOOL) --mode=install cp apr.exp $(DESTDIR)$(libdir)
++		#$(LIBTOOL) --mode=install cp libtool $(DESTDIR)$(installbuilddir);
++		#$(LIBTOOL) --mode=install cp shlibtool $(DESTDIR)$(installbuilddir);
++	#$(LIBTOOL) --mode=install cp apr-config $(DESTDIR)$(bindir)
++
+ $(TARGET_LIB):
+ 	@for i in $(SUBDIRS); do objects="$$objects $$i/*.@so_ext@"; done ; \
+-	    tmpcmd="$(LINK) @lib_target@ @lib_target_libs@"; \
++	    tmpcmd="$(AR) cr $@ $$objects @lib_target_libs@"; \
+ 	    echo $$tmpcmd; \
+ 	    $$tmpcmd && touch $@
++
++	    #tmpcmd="$(LINK) @lib_target@ @lib_target_libs@";
+ 
+ delete-exports:
+ 	@if test -f apr.exp; then \
+diff -Naur orig/httpd-2.0.44/srclib/apr/build/rules.mk.in my/httpd-2.0.44/srclib/apr/build/rules.mk.in
+--- orig/httpd-2.0.44/srclib/apr/build/rules.mk.in	Tue Dec 31 16:01:41 2002
++++ my/httpd-2.0.44/srclib/apr/build/rules.mk.in	Sun Mar 16 13:37:36 2003
+@@ -119,9 +119,11 @@
+ # Basic macro setup
+ #
+ COMPILE      = $(CC) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(ALL_INCLUDES)
+-LT_COMPILE   = @lt_compile@
++#LT_COMPILE   = @lt_compile@
++LT_COMPILE   = $(COMPILE) -o $@ -c $<
+ 
+-LINK         = @link@
++#LINK         = @link@
++LINK         = $(LD) $(ALL_CFLAGS) $(ALL_CPPFLAGS) $(ALL_INCLUDES) $(ALL_LDFLAGS) -o $@
+ 
+ MKEXPORT     = $(AWK) -f $(apr_builders)/make_export.awk
+ MKDEP        = @MKDEP@
+@@ -184,7 +186,8 @@
+ # In case someone ran autoconf by hand, get rid of that directory
+ # aswell.
+ local-clean: x-local-clean
+-	$(RM) -f *.o *.lo *.a *.la *.so *.obj $(CLEAN_TARGETS) $(PROGRAMS)
++	$(RM) -f *.o *.lo *.a *.la *.so *.obj *.i *combcil.* ___extra_files \
++	    $(CLEAN_TARGETS) $(PROGRAMS)
+ 	$(RM) -rf .libs autom4te.cache
+ 
+ local-distclean: local-clean x-local-distclean
+diff -Naur orig/httpd-2.0.44/srclib/apr/poll/unix/poll.c my/httpd-2.0.44/srclib/apr/poll/unix/poll.c
+--- orig/httpd-2.0.44/srclib/apr/poll/unix/poll.c	Mon Jan  6 16:52:56 2003
++++ my/httpd-2.0.44/srclib/apr/poll/unix/poll.c	Sun Mar 16 13:37:36 2003
+@@ -121,6 +121,7 @@
+                       apr_int32_t *nsds, apr_interval_time_t timeout)
+ {
+     int i, num_to_poll;
++#if 0
+ #ifdef HAVE_VLA
+     /* XXX: I trust that this is a segv when insufficient stack exists? */
+     struct pollfd pollset[num];
+@@ -128,6 +129,7 @@
+     struct pollfd *pollset = alloca(sizeof(struct pollfd) * num);
+     if (!pollset)
+         return APR_ENOMEM;
++#endif
+ #else
+     struct pollfd tmp_pollset[SMALL_POLLSET_LIMIT];
+     struct pollfd *pollset;
+diff -Naur orig/httpd-2.0.44/srclib/apr-util/Makefile.in my/httpd-2.0.44/srclib/apr-util/Makefile.in
+--- orig/httpd-2.0.44/srclib/apr-util/Makefile.in	Tue Sep 10 03:10:50 2002
++++ my/httpd-2.0.44/srclib/apr-util/Makefile.in	Sun Mar 16 13:37:36 2003
+@@ -69,19 +69,25 @@
+ 	list='$(INSTALL_SUBDIRS)'; for i in $$list; do \
+ 		( cd $$i ; $(MAKE) DESTDIR=$(DESTDIR) install ); \
+ 	done
+-	$(LIBTOOL) --mode=install cp $(TARGET_LIB) $(DESTDIR)$(libdir)
+-	$(LIBTOOL) --mode=install cp aprutil.exp $(DESTDIR)$(libdir)
++	cp $(TARGET_LIB) $(DESTDIR)$(libdir)
++	cp aprutil.exp $(DESTDIR)$(libdir)
+ 	if [ ! -d $(DESTDIR)$(bindir) ]; then \
+ 		@APR_SOURCE_DIR@/build/mkdir.sh $(DESTDIR)$(bindir); \
+ 	fi;
+-	$(LIBTOOL) --mode=install cp apu-config $(DESTDIR)$(bindir)
++	cp apu-config $(DESTDIR)$(bindir)
+ 	chmod 755 $(DESTDIR)$(bindir)/apu-config
+ 
++	#$(LIBTOOL) --mode=install cp $(TARGET_LIB) $(DESTDIR)$(libdir)
++	#$(LIBTOOL) --mode=install cp aprutil.exp $(DESTDIR)$(libdir)
++	#$(LIBTOOL) --mode=install cp apu-config $(DESTDIR)$(bindir)
++
+ $(TARGET_LIB):
+ 	@objects="`find $(SUBDIRS) -name expat -prune -o -name 'gen_uri_delims.@so_ext@' -prune -o -name '*.@so_ext@' -print`"; \
+-	    tmpcmd="$(LINK) @lib_target@ @EXTRA_OS_LINK@"; \
++	    tmpcmd="$(AR) cr $@ $$objects @EXTRA_OS_LINK@"; \
+ 	    echo $$tmpcmd; \
+ 	    $$tmpcmd && touch $@
++
++	    #tmpcmd="$(LINK) @lib_target@ @EXTRA_OS_LINK@";
+ 
+ delete-exports:
+ 	@if test -f aprutil.exp; then \
+diff -Naur orig/httpd-2.0.44/srclib/apr-util/xml/expat/lib/Makefile.in my/httpd-2.0.44/srclib/apr-util/xml/expat/lib/Makefile.in
+--- orig/httpd-2.0.44/srclib/apr-util/xml/expat/lib/Makefile.in	Sun Jul  8 19:31:06 2001
++++ my/httpd-2.0.44/srclib/apr-util/xml/expat/lib/Makefile.in	Sun Mar 16 13:37:36 2003
+@@ -91,9 +91,11 @@
+ LIBAGE      = @LIBAGE@
+ 
+ COMPILE = $(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
+-LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
++#LTCOMPILE = $(LIBTOOL) --mode=compile $(CC) $(DEFS) $(INCLUDES) $(CPPFLAGS) $(CFLAGS)
++LTCOMPILE = $(COMPILE) -o $@
+ CCLD = $(CC)
+-LINK = $(LIBTOOL) --mode=link  $(CCLD) -version-info $(LIBCURRENT):$(LIBREVISION):$(LIBAGE) $(CFLAGS) $(LDFLAGS) -o $@
++#LINK = $(LIBTOOL) --mode=link  $(CCLD) -version-info $(LIBCURRENT):$(LIBREVISION):$(LIBAGE) $(CFLAGS) $(LDFLAGS) -o $@
++LINK = $(AR) cr $@
+ DIST_COMMON =  Makefile.in
+ 
+ 
+@@ -124,7 +126,7 @@
+ 	cd $(top_builddir) && $(MAKE) config.h
+ 
+ clean:
+-	rm -f $(LIBRARY) *.o *.lo *~
++	rm -f $(LIBRARY) *.o *.lo *~ *.i *combcil.* ___extra_files
+ 	rm -rf .libs _libs
+ 
+ distclean: clean
+@@ -134,15 +136,19 @@
+ 
+ install: $(LIBRARY) $(APIHEADER)
+ 	$(mkinstalldirs) $(DESTDIR)$(libdir) $(DESTDIR)$(includedir)
+-	$(LIBTOOL)  --mode=install $(INSTALL) $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBRARY)
++	$(INSTALL) $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBRARY)
+ 	$(INSTALL_DATA) $(APIHEADER) $(DESTDIR)$(includedir)
+ 
++	#$(LIBTOOL)  --mode=install $(INSTALL) $(LIBRARY) $(DESTDIR)$(libdir)/$(LIBRARY)
++
+ uninstall:
+ 	$(LIBTOOL)  --mode=uninstall rm -f $(DESTDIR)$(libdir)/$(LIBRARY);
+ 	rm -f $(DESTDIR)$(libdir)/$(APIHEADER)
+ 
+ $(LIBRARY): $(LTOBJECTS)
+-	$(LINK) -rpath $(libdir) $(LDFLAGS) $(LTOBJECTS)
++	$(LINK) $(LTOBJECTS)
++
++	#$(LINK) -rpath $(libdir) $(LDFLAGS) $(LTOBJECTS)
+ 
+ xmlparse.o \
+ xmlparse.lo: xmlparse.c expat.h xmlrole.h xmltok.h $(top_builddir)/config.h

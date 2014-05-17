@@ -1,0 +1,15 @@
+
+This directory contains a few miscellaneous files that document various
+parts of Capriccio.  This is by no means comprehensive documentation, but
+hopefully it will help get people started.  ;-)
+
+   apache-build       Notes on building apache with Capriccio
+   build-berkeleydb   Notes on building Berkeley DB with Capriccio
+   nptl-biuld         Notes on building NPTL
+   using-cil          Information on how to use CIL with Capriccio
+   html               Some HTML/gif format blocking graphs, generated from
+                      running applications.
+
+Rob von Behren <jrvb@cs.berkeley.edu>
+
+

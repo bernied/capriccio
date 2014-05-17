@@ -1,0 +1,21 @@
+ARCH=@ARCH@
+MAN=@MANSRC@
+
+all:
+	@cd $(ARCH) && $(MAKE) $@
+
+test: all
+	@cd testing && $(MAKE) test
+	@echo "Test passed"
+
+install:
+	@cd $(ARCH) && $(MAKE) install
+
+clean:
+	@cd $(ARCH) && $(MAKE) clean
+	@cd testing && $(MAKE) clean
+	@cd examples && $(MAKE) clean
+	rm -f coro.lsm coro.html
+
+distclean: clean
+	rm -f Makefile $(ARCH)/Makefile testing/Makefile examples/Makefile $(MAN)

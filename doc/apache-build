@@ -1,0 +1,99 @@
+
+1. cd capriccio/src; make
+2. cd httpd-2.0.44; patch -p2 < patchfile
+  NOTE (Feng): as of 7/19/03, the patch is no longer needed for the server to work because of the newly implemented signal stuff.
+
+3. CAP=/path/to/capriccio/src
+
+4. configure,
+for debugging:
+
+CFLAGS="-I$CAP/include -O2 -g" CPPFLAGS="-I$CAP/include -O2 -g" LDFLAGS="-L$CAP/lib -lcrypt -lm" NOTEST_LDFLAGS="-all-static" ./configure --enable-threads --with-mpm=worker --without-sendfile --disable-cgi --disable-cgid --enable-maintainer-mode --prefix=/home/zf/apache
+
+older version:
+CPPFLAGS="-I$CAP/include" LDFLAGS="-L$CAP/lib" NOTEST_LDDFLAGS="-all-static" CFLAGS="-O2 -lcrypt -pthread" ./configure --enable-threads --with-mpm=worker --without-sendfile --disable-cgi --disable-cgid --enable-maintainer-mode
+
+for benchmarking (by jrvb):
+CPPFLAGS="-I$CAP/include" LDFLAGS="-L$CAP/lib" NOTEST_LDDFLAGS="-all-static" CFLAGS="-DFD_SETSIZE=16384 -D__stub_semget -D__stub_semctl -D__stub_semop -O2 -lcrypt -pthread" ./configure --enable-threads --with-mpm=worker --without-sendfile --disable-cgi --disable-cgid
+
+4b. old flags (seems not working now, maybe work on Redhat)
+CPPFLAGS="-I$CAP/include -static" LDFLAGS="-L$CAP/lib" ./configure --enable-threads --with-mpm=worker --without-sendfile --disable-shared --enable-maintainer-mode --prefix=$HOME/myapache2 --disable-cgi --disable-cgid
+
+5. make
+6. run apache with ./httpd -D DEBUG
+   one functionallity of -D DEBUG is to make it single process
+   multi-process httpd probably doesn't work because signals are used to communicate between them.
+
+This will build a statically linked version of apache, which should
+work on all systems.  (the syscall overriding doesn't work on some systems...)
+
+
+Additional instructions for use with CIL:
+
+1. [check out cil (preferred)]
+     cd /path/to/wherever
+     cvs -d manju.cs.berkeley.edu:/home/cvs-repository co cil
+   [or grab a tarball from largo (may be out of date)]
+     cd /path/to/wherever
+     scp largo.millennium.berkeley.edu:/home/jcondit/cil.tar.gz .
+     tar zxvf cil.tar.gz
+2. [configure and build cil]
+     cd /path/to/cil
+     ./configure --with-blockinggraph
+     make
+3. [apply cil patch in addition to capriccio patch above]
+     cd httpd-2.0.44
+     patch -p2 < apache-2.0.44-cil.diff
+4. [configure as above, minus the NOTEST_LDFLAGS parameter]
+5. [edit CIL and CAP paths in mymake]
+6. [run fancy make command]
+     chmod u+rx mymake
+     ./mymake
+7. [run httpd as above]
+
+The patch changes the Makefiles to use CIL instead of libtool, using
+the CIL front end checked into the capriccio repository.  This front
+end merges all of Apache into a single file and then instruments it
+accordingly.
+
+You'll need to have ocaml and python installed.
+
+
+
+BUGS:
+
+x heavy loads seem to cause the server to hang
+
+x after prolonged test, apache will fail to serve pages with the following error message
+  restarting apache will not help.  seems to be some kernel problem.
+
+    [Tue Mar 11 01:22:44 2003] [emerg] (28)No space left on device: Couldn't create accept lock
+
+x the process will not stop gracefully, you have to kill -9 <pid> each time.  this is because 
+  we don't support signal handling yet, which is used to handle broken pipe, graceful shutdown/restart
+
+x (fixed) initgroups() is causing internal error in glibc
+
+x (fixed) we don't have writev(), used by apr_socket_sendfile()
+
+
+
+
+CHANGELOG:
+
+x. change group from #-1 to nobody in httpd.conf
+
+x. change apr_sigwait() in apr_signal_thread to empty apr_thread_yield() calls, because we don't have signal support now
+
+x. (obsolete) in srclib/apr/include/apr.h, turn APR_HAS_OTHER_CHILD off
+
+
+
+Notes on MPM worker:
+
+worker.c:ap_mpm_run()
+
+-> startup_children
+  start a bunch of child processes
+
+

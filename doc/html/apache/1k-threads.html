@@ -1,0 +1,24 @@
+<html>
+
+Note nodes 29 (waiting for new work) and 35 (in the request
+processing).  Things get wedged in 35 for some reason....
+<p>
+
+
+in the middle of processing.  Throughput has started to slow, as nodes
+are getting stuck in 35.
+<img src="1k-1.gif" border=1><br>
+<p><br><p>
+
+Things are fully wedged now.  All worker threads are stuck in 35.
+<img src="1k-2.gif" border=1><br>
+<p><br><p>
+
+After waiting a couple of minutes, things finally finish up, and
+threads go back to waiting for new jobs.
+<img src="1k-3.gif" border=1><br>
+<p><br><p>
+
+
+
+</html>

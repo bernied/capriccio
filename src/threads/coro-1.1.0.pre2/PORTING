@@ -1,0 +1,201 @@
+	PORTING INSTRUCTIONS FOR THE CORO LIBRARY
+		E. Toernig	25.Feb.1999
+
+
+0. Introduction
+
+	The goal of this library is to define a C-API for
+	coroutines and then implement it for as much system
+	architectures as possible.  So, if you find that
+	your system is not yet supported take some time
+	and port the library.  It is very simple (only
+	about 200 lines) but requires some assembly code.
+
+	To make coroutines work, your system must allow
+	multiple stacks in arbitrary memory regions.
+	All stacks must be present at the same time and
+	in the same address space.  If your system doesn't
+	allow this, coroutines defined by this library
+	will not work.  Please let me know if you find
+	such a system.  If there are too many, I have to
+	modify the standard :-(
+
+
+1. Starting
+
+	First create a new directory for your system and
+	copy copy the sample files from the sample dir to
+	you newly created directory.  Have a look at them.
+	They contain some useful information.
+
+
+2. testarch
+
+	This script is run by configure and should return
+	with exit status 0 if it is run on your system.
+
+
+3. Makefile.in
+
+	The configure script will substitute the @foobar@
+	symbols and then install it as your Makefile.
+	Read the comments about the required targets.
+
+	Note: The top-level makefile's distclean target
+	will remove a present 'Makefile'.  So be careful
+	with changes to the generated Makefile.
+
+
+4. coro.h
+
+	This is the standard header file for the library.
+	The "make all" may want to build it but normally
+	it's just there from the beginning.
+
+	It must have the prototypes for the functions
+	defined in the man pages, the symbols co_current
+	and co_main have to be declared, and a version
+	of struct coroutine with the three public elements
+	caller, resumeto, and user must be defined.
+
+	The application is not required to include any-
+	thing else than this file to use coroutines, so
+	if you need other header files include them here.
+
+	The supplied sample coro.h should by OK for most
+	systems.
+
+
+5. coro.c
+
+	The main part in porting the coroutines is by
+	writing the three functions co_create, co_delete,
+	and co_call.
+
+    5.1 co_create
+
+	co_create has to build and initialize a stack
+	for the new coroutine.  The struct coroutine
+	should be at the end of the stack.
+
+	Make sure, that the stack is properly aligned.
+	The application isn't required to know about
+	stack alignment.  It is defined, that a stack
+	size of less then 128 bytes always generates
+	an error.
+
+	If your system doesn't have mmap or you don't
+	like it you may use malloc or any other method
+	to allocate your stack.
+
+	The stack has to be prepared so that the first
+	call to co_call starts the given function.
+	Make sure, that when this function returns it
+	is restarted after a co_resume (see __co_wrap).
+
+	Furthermore you have to make sure, that co_main
+	gets initialized.  Either during the co_create
+	or the first invocation of co_call.
+
+    5.2 co_delete
+
+	co_delete is pretty simple.  Just free the memory
+	you allocated during co_create.
+
+	Include a check against deleting the current co-
+	routine.
+
+    5.3 co_call
+
+	This is the main function.  It requires some
+	assembler code (please, don't try heavy setjmp/
+	longjmp magic).  If your compiler doesn't support
+	inline assembly you have to put this function (and
+	maybe __co_wrap, too) into a separate asm file.
+
+	It should:
+
+	    - save the current coroutines state
+	    - set the caller field in the new coroutine
+	    - set co_current to the new coroutine
+	    - restore the state of the new coroutine
+	    - restart the new coroutine with the given
+	      data pointer
+
+	The sample code shows, what has to be done.
+	To determine, what has to be saved for a corou-
+	tine you may have a look at setjmp/longjmp.
+	Normally, its sufficient to save the same
+	set of registers setjmp/longjmp does.
+
+	If it's inconvenient to push the state onto
+	the stack, you may opt to save the state into
+	the struct coroutine.
+
+    5.4 co_exit_to
+
+	This one is a little bit tricky but pretty port-
+	able.  The only thing to check is the amount of
+	stack for the helper coroutine.  If must be
+	large enough for co_delete and for a signal
+	handler (a signal may arrive just at the moment
+	the helper is running!).
+
+	It may be possible to implement this function
+	by first switching to the new coroutine and
+	calling co_delete from its context but I doubt
+	that it will be easier than the method with
+	a helper coroutine.
+
+	A note about the use of the global helper_args:
+	I just made it this way because it allows me
+	to do some additional error checks.
+
+    5.5 co_exit and co_resume
+
+	These two function shouldn't required any
+	modification.
+
+
+6. Testing
+
+	Now it's time to test your newly created library.
+	I've added a simple test program that checks the
+	functionality of the coroutines.
+
+	Just execute "make test" in the top level directory.
+	It runs some tests and compares the generated out-
+	put to that of a "know good" implementation.
+
+	If you got differences, check the sources of the
+	test program.  It may help you to locate the
+	problem.
+
+
+7. Sending a patch
+
+	Run a 'make distclean' and email the contents of
+	your new arch directory and any changes you have
+	to made to the other part of the archive to
+
+	    froese@gmx.de
+
+	I will include it in the next release of the pack-
+	age and your name will be added to the CREDITS
+	file *g*.
+
+
+8. Non-Unix system
+
+	I still have to figure out a way to build on
+	those systems.
+
+
+
+A. Discussion
+
+	At the moment, there's no mailing list to discuss
+	the library.
+
+	But any comments, bug fixes, ideas, flames, ... are
+	welcome.

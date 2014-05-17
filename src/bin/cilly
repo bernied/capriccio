@@ -1,0 +1,271 @@
+#!/usr/bin/perl
+# A simple use of the Cilly module
+#
+#
+#
+# Copyright (c) 2001-2002, 
+#  George C. Necula    <necula@cs.berkeley.edu>
+#  Scott McPeak        <smcpeak@cs.berkeley.edu>
+#  Wes Weimer          <weimer@cs.berkeley.edu>
+# All rights reserved.
+# 
+# Redistribution and use in source and binary forms, with or without
+# modification, are permitted provided that the following conditions are
+# met:
+#
+# 1. Redistributions of source code must retain the above copyright
+# notice, this list of conditions and the following disclaimer.
+#
+# 2. Redistributions in binary form must reproduce the above copyright
+# notice, this list of conditions and the following disclaimer in the
+# documentation and/or other materials provided with the distribution.
+#
+# 3. The names of the contributors may not be used to endorse or promote
+# products derived from this software without specific prior written
+# permission.
+#
+# THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS
+# IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED
+# TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A
+# PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER
+# OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+# EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+# PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+# PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+# LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+# NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
+# SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+#
+use strict;
+use Data::Dumper;
+use FindBin;
+
+if (!defined($ENV{CIL})) {
+    die "Please set CIL to the location of the CIL repository.\n";
+}
+
+use lib "$ENV{CIL}/bin";
+
+# Read the configuration script
+use CilConfig;
+
+use Cilly;
+
+$::default_is_merge = 0;
+my $stub = CilCompiler->new(@ARGV);
+
+$stub->setVersion ();
+
+# print Dumper($stub);
+$stub->doit();
+
+
+# Define here your favorite compiler by overriding Merger methods
+package CilCompiler;
+use Carp;
+use File::Basename;
+use strict;
+BEGIN {
+    @CilCompiler::ISA = qw(Cilly);
+    $CilCompiler::base = "$::cilhome/obj/$::archos/cilly";
+    # Use the most recent version of cilly
+    $CilCompiler::mtime_asm = int((stat("$CilCompiler::base.asm.exe"))[9]);
+    $CilCompiler::mtime_byte = int((stat("$CilCompiler::base.byte.exe"))[9]);
+    $CilCompiler::compiler = 
+        $CilCompiler::base . 
+            ($CilCompiler::mtime_asm >= $CilCompiler::mtime_byte 
+             ? ".asm.exe" : ".byte.exe");
+}
+
+# We need to customize the collection of arguments
+sub collectOneArgument {
+    my($self, $arg, $pargs) = @_;
+    if($arg =~ m|--transval=(.+)$|)  {
+        $self->{TRANSVAL} = $1; return 1;
+    }
+    if($arg eq '--ocamldebug')  {
+        $self->{OCAMLDEBUG} = $1; return 1;
+    }
+    if($arg eq '--cabsonly') {
+        $self->{CABSONLY} = 1; return 1;
+    }
+    if($arg eq '--analyzestack') {
+        $self->{ANALYZESTACK} = 1; return 1;
+    }
+    # See if the super class understands this
+    return $self->SUPER::collectOneArgument($arg, $pargs);
+}
+
+sub usage {
+    print "cilly [options] [gcc_or_mscl arguments]\n";
+}
+
+sub helpMessage {
+    my($self) = @_;
+    # Print first the original
+    $self->SUPER::helpMessage();
+    print <<EOF;
+
+  All other arguments starting with -- are passed to the Cilly process.
+
+The following are the arguments of the Cilly process
+EOF
+   my @cmd = ($CilCompiler::compiler, '-help');
+   $self->runShell(@cmd); 
+}
+
+
+sub compileToAsmOutputFile {
+    my($self, $src) = @_;
+
+    die "objectOutputFile: not a C source file: $src\n"
+        unless $src =~ /\.($::cilbin|c|cc|cpp|i|s|S)$/;
+
+    return $self->cilOutputFile($src, 's');
+}
+
+sub filterOutputFile {
+    my ($self, $src) = @_;
+    return $self->cilOutputFile($src, 'nocall.c');
+}
+
+sub filter_instrumentation {
+    my ($self, $src, $dest) = @_;
+    print "Filtering instrumentation macros...\n";
+    system('grep -Ev \'_CALL_|#include "stack.h"|#include "startnode.h"|start_node_addrs|start_node_stacks\' ' .
+           $src->filename . ' > ' . $dest->filename);
+}
+
+sub stack_analysis {
+    my ($self, $src) = @_;
+    print "Analyzing stack sizes...\n";
+    system("${FindBin::Bin}/stacksize " . $src->filename . " > stack");# && die;
+    print "Analyzing call graph...\n";
+    system("${FindBin::Bin}/analyzegraph graph stack > graphstack") && die;
+}
+
+sub compile_cil_to_asm {
+    my ($self, $src, $dest, $ppargs, $ccargs) = @_;
+    print 'Compiling ', $src->filename, ' into ', $dest->filename, "\n";
+    if($self->{VERBOSE}) { print STDERR 'Compiling ', $src->filename, ' into ', $dest->filename, "\n"; }
+    my @dest = $dest eq "" ? () : ($self->{OUTOBJ}, $dest);
+    my @forcec = @{$self->{FORCECSOURCE}};
+    my @cmd = ('gcc', '-D_GNUCC', '-S', @{$ppargs}, @{$ccargs},
+               @dest, @forcec, $src);
+    return $self->runShell(@cmd);
+}
+
+
+sub applyCil {
+    my ($self, $ppsrc, $dest) = @_;
+    
+    # The input files
+    my @srcs = @{$ppsrc};
+
+    # Now prepare the command line for invoking cilly
+    my ($aftercil, @cmd) = $self->CillyCommand ($ppsrc, $dest);
+    confess "$self produced bad output file: $aftercil" unless $aftercil->isa('OutputFile');
+
+    if($self->{MODENAME} eq "MSVC") {
+        push @cmd, '--MSVC';
+    }
+    if($self->{VERBOSE}) {
+        push @cmd, '--verbose';
+    }
+    if($self->{ANALYZESTACK}) {
+        push @cmd, '--dooneRet';
+        push @cmd, '--doFCG';
+        push @cmd, '--domakeCFG';
+    }
+    if(defined $self->{CILARGS}) {
+        push @cmd, @{$self->{CILARGS}};
+    }
+
+    # Add the arguments
+    if(@srcs > 20) {
+        my $extraFile = "___extra_files";
+        open(TOMERGE, ">$extraFile") || die $!;
+        foreach my $fl (@srcs) {
+            print TOMERGE "$fl\n";
+        }
+        close(TOMERGE);
+        push @cmd, '--extrafiles', $extraFile;
+    } else {
+        push @cmd, @srcs;
+    }
+    if(@srcs > 1 && $self->{KEEPMERGED}) {
+	my ($base, $dir, undef) = fileparse($dest->filename, qr{\.[^.]+});
+        push @cmd, '--mergedout', "$dir$base" . '.c';
+    }
+    # Now run cilly
+    $self->runShell(@cmd);
+
+    # Tell the caller where we put the output
+    return $aftercil;
+}
+
+
+sub applyCilAndCompile {
+    my ($self, $ppsrc, $dest, $ppargs, $ccargs) = @_;
+    confess "$self produced bad destination file: $dest"
+	unless $dest->isa('OutputFile');
+
+    # The input files
+    my @srcs = @{$ppsrc};
+    #&mydebug("Cilly.PM.applyCilAndCompile(srcs=[",join(',',@{$ppsrc}),"])\n");
+
+    # Now run cilly
+    my $aftercil = $self->applyCil($ppsrc, $dest);
+    confess "$self produced bad output file: $aftercil" unless $aftercil->isa('OutputFile');
+
+    if ($self->{ANALYZESTACK}) {
+        my $filter = $self->filterOutputFile($aftercil->filename);
+        my $asm = $self->compileToAsmOutputFile($filter->filename);
+        $self->filter_instrumentation($aftercil, $filter);
+        $self->compile_cil_to_asm($filter, $asm, $ppargs, $ccargs);
+        $self->stack_analysis($asm);
+    }
+
+    # Now preprocess
+    my $aftercilpp = $self->preprocessAfterOutputFile($aftercil);
+    $self->preprocess_after_cil($aftercil, $aftercilpp, $ppargs);
+
+    if (!defined($ENV{CILLY_DONT_COMPILE_AFTER_MERGE})) {
+      # Now compile
+      return $self->compile_cil($aftercilpp, $dest, $ppargs, $ccargs);
+    }
+}
+
+
+sub CillyCommand {
+    my ($self, $ppsrc, $dest) = @_;
+
+    my $aftercil;
+    my @cmd = ($CilCompiler::compiler);
+
+    if(defined $ENV{OCAMLDEBUG}) {
+        my @idirs = ("src", "src/frontc", "src/ccured", "src/ext", 
+                     "obj/$::archos");
+	my @iflags = map { ('-I', "$::cilhome/$_") } @idirs;
+        unshift @cmd, 'ocamldebug', '-emacs', @iflags;
+    }
+    if($::docxx) {
+        push @cmd, '--cxx';
+    }
+    if($self->{CABSONLY}) {
+        $aftercil = $self->cilOutputFile($dest, 'cabs.c');
+        push @cmd, '--cabsonly', $aftercil;
+    } else {
+	$aftercil = $self->cilOutputFile($dest, 'cil.c');
+    }
+    return ($aftercil, @cmd, '--out', $aftercil);
+}
+
+sub MergeCommand {
+    my ($self, $ppsrc, $dir, $base) = @_;
+
+    return ('', $CilCompiler::compiler);
+}
+
+
+1;

@@ -1,0 +1,17 @@
+
+Executables used during the build process:
+
+  cilly:
+    Front end for CIL.  Overrides normal behavior to invoke the stack
+    analysis, if requested.
+
+  stacksize:
+    Parses gcc x86 assembly output to determine the maximum stack size
+    for each function.
+
+  analyzegraph:
+    Takes the call graph and the stack sizes (output of above) as input
+    and determines which calls need to link new stack chunks.  Prints
+    some information about the analyzed graph and outputs stack.h, which
+    indicates which edges must be instrumented.
+

@@ -1,0 +1,16 @@
+ARCH=@ARCH@
+CFLAGS=-O -Wall -I$(ARCH)
+LDFLAGS=-L$(ARCH)
+LDLIBS=-lcoro
+
+SRCS=$(wildcard *.c)
+OBJS=$(SRCS:.c=.o)
+EXEC=$(SRCS:.c=)
+
+all: $(EXEC)
+
+$(OBJS): $(ARCH)/coro.h
+$(EXEC): $(ARCH)/libcoro.a
+
+clean:
+	rm -f *.o core $(EXEC)

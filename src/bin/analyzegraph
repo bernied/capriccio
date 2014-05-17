@@ -1,0 +1,544 @@
+#!/usr/bin/python
+
+import math
+import string
+import sys
+import re
+
+# Analysis parameters.
+min_chunk_kb_log2 = 2
+path_limit_kb_log2 = 1
+
+if len(sys.argv) > 3:
+    path_limit_kb_log2 = int(sys.argv[3])
+
+# Other settings.
+max_chunk_kb_log2 = 11
+extra_space = 0
+extra_space_per_node = 0
+fptr_check = 0
+unreachable_check = 0
+start_node_name = "@@startNode@@"
+
+# Derived parameters.
+min_chunk_log2 = min_chunk_kb_log2 + 10
+max_chunk_log2 = max_chunk_kb_log2 + 10
+max_chunk = int(math.pow(2, max_chunk_log2))
+path_limit_log2 = path_limit_kb_log2 + 10
+path_limit = int(math.pow(2, path_limit_log2))
+
+# If we're allowing extra padding, decrease the path limit accordingly.
+path_limit -= extra_space
+
+#########################################################################
+# Node data structure.
+
+class node:
+    def __init__(self, nodeid, name, stack_annot, external, succ_names):
+        self.nodeid = nodeid
+        self.name = name
+        self.stack_annot = stack_annot + extra_space_per_node
+        self.external = external
+        self.fptr = re.search('^@@functionPointer@@', name)
+        self.succ_names = succ_names
+        self.succs = []
+        self.tree_succs = []
+        self.fwd_succs = []
+        self.back_succs = []
+        self.cross_succs = []
+        self.extern_succs = []
+        self.check_succs = []
+        self.nocheck_succs = []
+        self.fptr_preds = []
+        self.dfs = 0
+        self.visit = 0
+        self.boundary = 0
+        self.pre = 0
+        self.post = 0
+        self.stack = 0
+        self.local = 0
+        self.depth = 0
+        self.max_stack_dfs = 0
+        self.max_succ_dfs = None
+        self.max_stack_valid = 0
+        self.max_stack = 0
+        self.max_succ = None
+
+nodes = {}
+
+#########################################################################
+# Initialization.
+
+# Read graph.
+graphfile = open(sys.argv[1], 'r');
+for line in graphfile.readlines():
+    match = re.search('(\d+):(\d+):(x?):([^:]+):(.*)', line)
+    nodeid = int(match.group(1))
+    stack_annot = int(match.group(2))
+    external_str = match.group(3)
+    external = (len(external_str) == 1 and external_str[0] == 'x')
+    name = match.group(4)
+    name_list = match.group(5)
+    succ_names = []
+    if name_list != "":
+        succ_names = string.split(name_list, ',')
+    nodes[name] = node(nodeid, name, stack_annot, external, succ_names)
+graphfile.close()
+
+# Read stack data.
+stackfile = open(sys.argv[2], 'r');
+for line in stackfile.readlines():
+    match = re.search('(\d+):(\d+):(\S+)', line)
+    node = nodes[match.group(3)]
+    node.stack = int(match.group(1)) + extra_space_per_node
+    node.local = int(match.group(2))
+stackfile.close()
+
+# Create succs from succ names.
+for key in nodes.keys():
+    node = nodes[key]
+    node.succs = [nodes[name] for name in node.succ_names]
+    if node.stack <= 0 and not node.fptr and not node.external and \
+       node.name != start_node_name:
+        print "error: no stack info for", node.name
+        raise RuntimeError
+    if node.stack > max_chunk or node.stack_annot > max_chunk:
+        print "error: node stack exceeds maximum chunk size:", node.name
+        raise RuntimeError
+
+# Make a list of predecessors via function pointers.
+for key in nodes.keys():
+    node = nodes[key]
+    for succ in node.succs:
+        if succ.fptr:
+            for succ2 in succ.succs:
+                succ2.fptr_preds.append(node)
+
+# Find potentially-external function pointers.  We don't need to recur
+# because function pointer nodes must point to real function nodes.
+for key in nodes.keys():
+    node = nodes[key]
+    if node.fptr:
+        for succ in node.succs:
+            if succ.external:
+                node.external = 1
+
+#########################################################################
+# Graph analysis functions.
+
+# Reset flags.
+def clear_visit():
+    for key in nodes.keys():
+        nodes[key].visit = 0
+
+def clear_boundary():
+    for key in nodes.keys():
+        nodes[key].boundary = 0
+
+# Perform a depth-first search on the graph, classifying successors as
+# tree, forward, cross, or back.  [See Muchnick.]
+def dfs(node):
+    global curpre, curpost
+    node.dfs = 1
+    node.visit = 1
+    node.pre = curpre
+    curpre += 1
+    for succ in node.succs:
+        if not succ.visit:
+            dfs(succ)
+            node.tree_succs.append(succ)
+        elif node.pre < succ.pre:
+            node.fwd_succs.append(succ)
+        elif succ.post == 0:
+            node.back_succs.append(succ)
+        else:
+            node.cross_succs.append(succ)
+    node.post = curpost
+    curpost += 1
+
+# Main interface for dfs.
+def classify_succs():
+    global curpre, curpost
+    curpre = 1
+    curpost = 1
+    clear_visit()
+    dfs(nodes[start_node_name])
+
+# Determine maximum stack size along non-back edges.
+def max_stack_size(node):
+    if node.visit:
+        raise RuntimeError
+    elif node.max_stack_dfs == 0:
+        node.visit = 1
+        cur_stack = 0
+        cur_succ = None
+        for succ in node.tree_succs + node.fwd_succs + node.cross_succs:
+            max_stack_size(succ)
+            if succ.max_stack_dfs > cur_stack:
+                cur_stack = succ.max_stack_dfs
+                cur_succ = succ
+        node.max_stack_dfs = cur_stack + node.stack
+        node.max_succ_dfs = cur_succ
+        node.visit = 0
+
+# Determine maximum stack size bottom-up.  Use dynamic programming to
+# determine the max stack size starting from the current node; whenever
+# this size exceeds the limit, insert instrumented edges and start the
+# count from zero.
+class analysis_1:
+    # If max_stack is not already computed, compute it.
+    def max_stack_dfs_1(self, node):
+        # Sanity check: we should never recur.
+        if node.visit:
+            raise RuntimeError
+        elif not node.max_stack_valid:
+            node.visit = 1
+            cur_stack = 0
+            cur_succ = None
+            # For all non-back-edges...  (could be more efficient here)
+            for succ in node.tree_succs + node.fwd_succs + node.cross_succs:
+                # Force max stack computation.
+                self.max_stack_dfs_1(succ)
+                # If it's an external function with no annotation or it's
+                # a pointer to an external function, give it a big stack.
+                if succ.external and (succ.fptr or succ.max_stack == 0):
+                    node.extern_succs.append(succ)
+                # If it's a call to a function pointer node that has back
+                # edges or if it would exceed the desired path limit, add
+                # a check.
+                elif (succ.fptr and len(succ.back_succs) > 0) or \
+                     (succ.max_stack + node.stack > path_limit and \
+                      not node.fptr):
+                    node.check_succs.append(succ)
+                # Otherwise, no check is necessary, but we need to update
+                # our maximum stack size.
+                else:
+                    node.nocheck_succs.append(succ)
+                    if succ.max_stack > cur_stack:
+                        cur_stack = succ.max_stack
+                        cur_succ = succ
+            node.max_stack_valid = 1
+            node.max_stack = cur_stack + node.stack
+            node.max_succ = cur_succ
+            node.visit = 0
+
+    def max_stack_1(self):
+        clear_visit()
+        # Handle annotations
+        for key in nodes.keys():
+            node = nodes[key]
+            if node.external and len(node.succs) == 0 and \
+               (node.stack_annot > 0 or node.name[0:10] == "__builtin_"):
+                node.max_stack = node.stack_annot
+                # Hack to avoid problems in DFS for builtins
+                if node.max_stack == 0:
+                    node.max_stack = 4
+                node.max_stack_valid = 1
+        # Walk all non-back edges in the tree to classify successors.
+        self.max_stack_dfs_1(nodes[start_node_name])
+        # Now do some cleanup.
+        for key in nodes.keys():
+            node = nodes[key]
+            if node.dfs:
+                # This is a node we examined while walking the tree.
+                # We need to classify the back edges.
+                if node.fptr:
+                    # Function pointers nodes can't have checks (since they
+                    # don't actually exist), but we ensured that all calls
+                    # to this node are checked.  We do, however, need to
+                    # update the maximum possible stack.
+                    for succ in node.back_succs:
+                        node.nocheck_succs.append(succ)
+                        if succ.max_stack > node.max_stack:
+                            node.max_stack = succ.max_stack
+                            node.max_succ = succ
+                else:
+                    # It's not a function pointer, so we check all back
+                    # edges.  Note that because we insert checks, there's
+                    # no effect on the maximum stack size.
+                    for succ in node.back_succs:
+                        node.check_succs.append(succ)
+            else:
+                # We don't check anything we believe to be unreachable.
+                for succ in node.succs:
+                    node.nocheck_succs.append(succ)
+
+    def max_stack(self):
+        self.max_stack_1()
+
+# Determine maximum stack size top-down.  Traverse the DFS tree, placing
+# instrumentation as far down as possible without allowing the stack
+# depth to exceed the limit.  Then examine cross edges and forward edges,
+# adding instrumentation if adding an uninstrumented edge increases the
+# size of any node's max stack.
+#
+# This analysis doesn't work too well because there are lots of cross/fwd
+# edges that _could_ fit in the current stack frame, but since they would
+# increase the node's max stack depth, adding these edges would be unsound.
+#
+# This analysis is also out of date.  Don't use!
+class analysis_2:
+    def max_stack_dfs_2(self, node, depth):
+        if node.visit:
+            raise RuntimeError
+        node.depth = depth + node.stack
+        if node.depth > path_limit:
+            raise RuntimeError
+        node.visit = 1
+        cur_stack = 0
+        cur_succ = None
+        for succ in node.tree_succs:
+            if node.depth + succ.stack > path_limit:
+                node.check_succs.append(succ)
+                self.max_stack_dfs_2(succ, 0)
+            else:
+                node.nocheck_succs.append(succ)
+                self.max_stack_dfs_2(succ, node.depth)
+                if succ.max_stack > cur_stack:
+                    cur_stack = succ.max_stack
+                    cur_succ = succ
+        node.max_stack = cur_stack + node.stack
+        node.max_succ = cur_succ
+        node.visit = 0
+
+    def max_stack_2(self):
+        clear_visit()
+        self.max_stack_dfs_2(nodes[start_node_name], 0)
+        for key in nodes.keys():
+            node = nodes[key]
+            if node.dfs:
+                for succ in node.cross_succs + node.fwd_succs:
+                    if node.max_stack < succ.max_stack + node.stack:
+                        node.check_succs.append(succ)
+                        if node.depth + succ.max_stack < path_limit:
+                            global missed_ops
+                            missed_ops += 1
+                    else:
+                        node.nocheck_succs.append(succ)
+                for succ in node.back_succs:
+                    node.check_succs.append(succ)
+            else:
+                for succ in node.succs:
+                    node.nocheck_succs.append(succ)
+
+    def max_stack(self):
+        self.max_stack_2()
+
+class analysis_3:
+    def max_stack(self):
+        for key in nodes.keys():
+            node = nodes[key]
+            node.max_stack = node.stack
+            if node.fptr:
+                node.nocheck_succs = node.succs
+            else:
+                for succ in node.succs:
+                    if succ.external:
+                        node.extern_succs.append(succ)
+                    else:
+                        node.check_succs.append(succ)
+
+# Extra helpers.
+def get_trans_back(node):
+    result = []
+    if not node.visit:
+        node.visit = 1
+        result = [succ.name for succ in node.back_succs]
+        for succ in node.tree_succs + node.fwd_succs + node.cross_succs:
+            result += get_trans_back(succ)
+    return result
+
+def print_trans_back(node):
+    clear_visit()
+    print "trans back for", node.name, ":", get_trans_back(node)
+
+def get_chain(node):
+    result = [node.name]
+    if node.max_succ != None:
+        result += get_chain(node.max_succ)
+    return result
+
+def print_chain(node):
+    print "chain for", node.name, ":", get_chain(node)
+
+#########################################################################
+# Perform analysis.
+
+# Do the dfs.
+classify_succs()
+
+# Identify stack sizes.  The job of the analysis is to determine which
+# edges to instrument, setting check_succs and nocheck_succs appropriately.
+missed_ops = 0
+analysis_1().max_stack()
+
+# Do some sanity checks.
+for key in nodes.keys():
+    node = nodes[key]
+    if len(node.succs) != len(node.extern_succs) + len(node.check_succs) + \
+                          len(node.nocheck_succs):
+        print "error: successors weren't classified properly at node", \
+              node.name
+        raise RuntimeError
+    if node.fptr and len(node.succs) != len(node.nocheck_succs):
+        print "error: can't add checks to function pointer node", node.name
+        raise RuntimeError
+
+# Gather some statistics.
+extern = 0
+check = 0
+nocheck = 0
+extern_fptr = 0
+check_fptr = 0
+nocheck_fptr = 0
+for key in nodes.keys():
+    node = nodes[key]
+    extern += len(node.extern_succs)
+    check += len(node.check_succs)
+    nocheck += len(node.nocheck_succs)
+    extern_fptr += len([succ for succ in node.extern_succs if succ.fptr])
+    check_fptr += len([succ for succ in node.check_succs if succ.fptr])
+    nocheck_fptr += len([succ for succ in node.nocheck_succs if succ.fptr])
+total = extern + check + nocheck
+total_fptr = extern_fptr + check_fptr + nocheck_fptr
+print "extern: %d (%d%%), check: %d (%d%%), nocheck: %d (%d%%)" \
+      % (extern,  (extern  * 100) / total, \
+         check,   (check   * 100) / total, \
+         nocheck, (nocheck * 100 / total))
+#print "extern_fptr: %d (%d%%), check_fptr: %d (%d%%), nocheck_fptr: %d (%d%%)" \
+#      % (extern_fptr,  (extern_fptr  * 100) / total_fptr, \
+#         check_fptr,   (check_fptr   * 100) / total_fptr, \
+#         nocheck_fptr, (nocheck_fptr * 100 / total_fptr))
+#print "missed_ops:", missed_ops
+
+# Print out results.
+for key in nodes.keys():
+    node = nodes[key]
+    print node.max_stack, node.external, node.name, \
+          [(succ.name, succ.max_stack) for succ in node.back_succs]
+
+# Find maximum stack depth.
+overall_max = 0
+for key in nodes.keys():
+    node = nodes[key]
+    if node.max_stack > overall_max:
+        overall_max = node.max_stack
+overall_max += 1024
+
+#########################################################################
+# Output stack.h.
+
+stackh = open("stack.h", 'w')
+stackh.write("#ifndef STACK_H\n#define STACK_H\n\n" +
+             "#include <stacklink.h>\n#include <fptrcheck.h>\n\n")
+
+def calc_chunk_size_log2(path):
+    path_log2 = int(math.ceil(math.log10(path) / math.log10(2)))
+    if path_log2 < min_chunk_log2:
+        path_log2 = min_chunk_log2
+    return path_log2
+
+# Instrument the node header.
+def instrument_node(node):
+    id = str(node.nodeid)
+    array_name = "preds_" + id
+    # Print an array of predecessors via function pointers, if necessary.
+    if fptr_check:
+        stackh.write("int " + array_name + "[] = { ")
+        for pred in node.fptr_preds:
+            stackh.write(str(pred.nodeid) + ", ")
+        stackh.write("0 };\n")
+    # Start printing the #define.
+    stackh.write("#define NODE_CALL_" + id + "() ")
+    # Check unreachable nodes or function pointer calls.
+    if unreachable_check and not node.dfs:
+        stackh.write("STACK_UNREACHABLE(" + id + ", \"" + node.name + "\")")
+    elif fptr_check:
+        stackh.write("FPTR_CHECK(" + id + ", " + array_name + ")")
+    stackh.write("\n")
+
+# Add no stack check to an edge.
+def instrument_nocheck(node, succ):
+    suffix = str(node.nodeid) + "_" + str(succ.nodeid) + "() "
+    # Before the call, set up function pointer checks and statistics.
+    stackh.write("#define BEFORE_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_CALL(" + str(node.nodeid) + "); ")
+    stackh.write("STACK_NOCHECK(" + \
+                    str(node.nodeid) + ", " + \
+                    str(succ.nodeid) + ")\n")
+    # After the call, tear down function pointer checks.
+    stackh.write("#define AFTER_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_DONE(" + str(node.nodeid) + ")")
+    stackh.write("\n")
+
+# Link in a big stack for this call.
+def instrument_extern(node, succ):
+    suffix = str(node.nodeid) + "_" + str(succ.nodeid) + "() "
+    # Before the call, set up function pointer checks and link a big stack.
+    stackh.write("#define BEFORE_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_CALL(" + str(node.nodeid) + "); ")
+    stackh.write("STACK_EXTERN_LINK(" + \
+                    str(max_chunk) + ", " + \
+                    str(max_chunk_kb_log2) + ", " + \
+                    str(node.nodeid) + ", " + \
+                    str(succ.nodeid) + ")\n")
+    # After the call, tear down function poitner checks and unlink the stack.
+    stackh.write("#define AFTER_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_DONE(" + str(node.nodeid) + "); ")
+    stackh.write("STACK_EXTERN_UNLINK(" + str(max_chunk_kb_log2) + ")\n")
+
+# Check and link a small stack.
+def instrument_check(node, succ):
+    suffix = str(node.nodeid) + "_" + str(succ.nodeid) + "() "
+    # Figure out how much space we might need.  We'll need space for the
+    # callee's stack, plus the arguments (conservatively approximated by
+    # our stack size), plus some extra space for good measure.
+    max_path = succ.max_stack + (node.stack - node.local) + extra_space
+    chunk_size_log2 = calc_chunk_size_log2(max_path)
+    chunk_size_kb_log2 = chunk_size_log2 - 10
+    chunk_size = int(pow(2, chunk_size_log2))
+    # Before the call, set up function pointer checks and link if necessary.
+    stackh.write("#define BEFORE_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_CALL(" + str(node.nodeid) + "); ")
+    stackh.write("STACK_CHECK_LINK(" + \
+                    str(max_path) + ", " + \
+                    str(chunk_size) + ", " + \
+                    str(chunk_size_kb_log2) + ", " + \
+                    str(node.nodeid) + ", " + \
+                    str(succ.nodeid) + ")\n")
+    # After the call, tear down function pointer checks and unlink if needed.
+    stackh.write("#define AFTER_CALL_" + suffix)
+    if fptr_check and succ.fptr:
+        stackh.write("FPTR_DONE(" + str(node.nodeid) + "); ")
+    stackh.write("STACK_CHECK_UNLINK(" + str(chunk_size_kb_log2) + ")\n")
+
+# Print stack sizes.
+for key in nodes.keys():
+    node = nodes[key]
+    max_path = node.max_stack + extra_space
+    if max_path > 0:
+        chunk_size_log2 = calc_chunk_size_log2(max_path)
+        chunk_size_kb_log2 = chunk_size_log2 - 10
+    else:
+        chunk_size_kb_log2 = 0
+    stackh.write("#define NODE_STACK_" + str(node.nodeid) + \
+                 " " + str(chunk_size_kb_log2) + "\n")
+
+# Instrument according to the analysis we performed.
+for key in nodes.keys():
+    node = nodes[key]
+    instrument_node(node)
+    for succ in node.extern_succs:
+        instrument_extern(node, succ)
+    for succ in node.check_succs:
+        instrument_check(node, succ)
+    for succ in node.nocheck_succs:
+        instrument_nocheck(node, succ)
+
+stackh.write("\n#endif // STACK_H\n")
+stackh.close()

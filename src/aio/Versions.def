@@ -1,0 +1,19 @@
+#
+# Very dumb ld versioning file.  This so far just prevents /bin/ls
+# from barfing when we link against the capriccio libpthread.so.
+#
+
+GLIBC_2.0 {
+          global: *;
+};
+
+GLIBC_2.1 {
+} GLIBC_2.0;
+
+GLIBC_2.2 {
+} GLIBC_2.1;
+
+#LIBAIO_0.1 {
+#           global: *;
+#};
+

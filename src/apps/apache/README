@@ -1,0 +1,2 @@
+This patch applies to apache 2.0.44, and adjusts the Makefiles for use with 
+CIL.  

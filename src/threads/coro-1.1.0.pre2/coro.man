@@ -1,0 +1,291 @@
+.na
+.TH CORO 2 "1.1.0.pre2" "GNU" "C Coroutines"
+.SH NAME
+co_create, co_call, co_resume, co_delete, co_exit_to, co_exit \- C coroutine management
+
+.SH SYNOPSIS
+.nf
+.B #include <coro.h>
+.sp
+.BI "struct coroutine {"
+.nl
+.BI "    ..."
+.nl
+.BI "    struct coroutine *caller;"
+.nl
+.BI "    struct coroutine *resumeto;"
+.nl
+.BI "    void *user;"
+.nl
+.BI "    ..."
+.nl
+.BI "};"
+.sp
+.BI "extern struct coroutine *co_current;"
+.nl
+.BI "extern struct coroutine co_main[];"
+.sp
+.BI "struct coroutine *co_create(void *" func ", void *" stack ", int " stacksize ");"
+.nl
+.BI "void co_delete(struct coroutine *" co ");"
+.nl
+.BI "void *co_call(struct coroutine *" co ", void *" data ");"
+.nl
+.BI "void *co_resume(void *" data ");"
+.nl
+.BI "void *co_exit_to(struct coroutine *" co ", void *" data ");"
+.nl
+.BI "void *co_exit(void *" data ");"
+.SH DESCRIPTION
+The
+.B coro
+library implements the low level functionality for coroutines.
+For a definition of the term
+.B coroutine
+see
+.IR "The Art of Computer Programming" " by " "Donald E. Knuth" .
+In short, you may think of coroutines as a very simple cooperative
+multitasking environment where the switch from one task to another
+is done explicitly by a function call.  And, coroutines are fast.
+Switching from one coroutine to another takes only a couple of
+assembler instructions more than a normal function call.
+
+This document defines an API for the low level handling of coroutines
+i.e. creating and deleting coroutines and switching between them.
+Higher level functionality (scheduler, etc.) is not covered.
+
+.SS Functions
+The following functions are defined:
+.TP
+.B co_create
+This function creates a new coroutine.
+.I func
+is the entry point of the coroutine.  It will be called with one
+arg, a
+.BR "void *" ,
+which holds the data given to the first
+.B co_call
+call.  If
+.I func
+terminates, an implicit
+.B co_resume
+with the function's return value is executed and the next
+.BR co_call / co_resume
+reenters the function at the top.
+
+.I stack
+is the base of the stack this coroutine will use and
+.I stacksize
+its size in bytes.  You may pass a
+.B NULL
+pointer for
+.I stack
+in which case the memory will be allocated by
+.B co_create
+itself.  Both,
+.IR stack " and " stacksize
+are aligned to system requirements.
+A
+.I stacksize
+of less then 128 bytes will be rejected.
+You have to make sure, that the stack is large enough for your
+coroutine and possible signal handlers (see below).  The stack
+will not grow!  (Exception: the
+.B co_main
+coroutine uses the standard system stack which may still grow.)
+
+On success, a handle
+.RB ( "struct coroutine *" )
+for a new coroutine is returned, otherwise
+.BR NULL .
+
+.TP
+.B co_delete
+This function deletes the given coroutine
+.IR co .
+If the stack for this coroutine was allocated by
+.B co_create
+it will be freed.  After a coroutine handle was passed to
+.B co_delete
+it is invalid and may not be used any more.
+
+It is invalid for a coroutine to delete itself with this
+function.
+
+.TP
+.B co_call
+This function passes execution to the given coroutine
+.IR co .
+The
+.I data
+pointer is transferred to the other coroutine.
+The current coroutine is suspended until another one restarts it with a
+.B co_call
+or
+.B co_resume
+call.  At that moment the
+.B co_call
+returns with the data pointer received from the other coroutine.
+
+Calling oneself returns immediately with the given
+.IR data .
+
+.TP
+.B co_resume
+This function passes execution back to the coroutine which either
+initially started this one or restarted it after a prior
+.BR co_resume .
+The
+.I data
+pointer and the return value is the same as for
+.BR co_call .
+
+.TP
+.B co_exit_to
+This function does the same a
+.B co_delete(co_current)
+followed by a
+.B co_call
+would do.  That is, it deletes itself and then passes execution
+and the
+.I data
+pointer to another coroutine
+.IR co .
+
+.TP
+.B co_exit
+This function does the same a
+.B co_delete(co_current)
+followed by a
+.B co_resume
+would do.  That is, it deletes itself and then passes execution
+and the
+.I data
+pointer back to the coroutine which either initially started
+this one or restarted it after a prior
+.BR co_resume .
+
+.SS Global variables
+Two global read only variables are defined:
+.TP
+.B co_current
+This variable always holds the handle of the currently active
+coroutine.  It may be used to access the public fields of the
+.BR "struct coroutine" .
+
+.TP
+.B co_main
+This identifier may be used as a handle for the initial,
+automagically created coroutine that performed the first
+.B co_call
+call.  Don't try to
+.B co_delete
+it *g*.
+
+.SS Public struct coroutine fields
+The following elements of the
+.B struct coroutine
+may be used by applications:
+.TP
+.B struct coroutine *caller;
+This is the handle of the previously active coroutine.  Only valid
+while the coroutine is active.
+.TP
+.B struct coroutine *resumeto;
+This is the handle of the coroutine where
+.BR co_resume " and " co_exit
+would switch to.  Only valid while the coroutine is active.
+.TP
+.B void *user;
+This field is reserved for applications.  It is set to
+.BR NULL " by " co_create
+and isn't touched until a
+.B co_delete
+invalidates the structure.
+
+.SS Notes
+Some interactions with other parts of the system are covered here.
+.TP
+.B Signals
+First, a signal handler is not defined to run in any specific
+coroutine.  The contents of the
+.BR co_current " and " co_main
+variables is undefined and you may not call
+.B any
+coroutine function.  The only way to leave the signal handler is
+by a return statement.
+
+Second, the signal handler may run with the stack of any coroutine,
+even with the stack of library internal coroutines which have an
+undefined stack size (just enough to perform a kernel call).
+Using and alternate stack for signal processing (see
+.BR sigaltstack (2))
+is recommended!
+
+Conclusion: avoid signals like a plague.  The only thing you may
+do reliable is setting some global variables and return.
+Simple kernel calls may work too, but nowadays it's pretty hairy
+to tell, which function really is a kernel call.
+(Btw, all this applies to normal C programs, too.  The coroutines
+just add one more problem *g*)
+.TP
+.B setjmp/longjmp
+The use of
+.BR setjmp / longjmp
+is limited to jumping inside one coroutine.  Never try to jump from
+one coroutine to another with
+.BR longjmp .
+.TP
+.B Passing local data
+With coroutines there is a new way to generate dangling references.
+If one coroutine passes a pointer to local data (storage class auto)
+to another coroutine this pointer
+.B may
+become invalid at the moment that coroutine is restarted or deleted.
+Especially, passing a pointer to auto data to
+.BR co_exit / co_exit_to
+is only valid, if the stack wasn't allocated by
+.BR co_create .
+.TP
+.B Minimalism
+The only necessary function would be
+.BR co_create ", " co_delete ", and " co_call .
+The other functions
+.RB ( co_resume ", " co_exit ", and " co_exit_to )
+could easily be implemented in a portable way.  But they seemed
+fundamental enough that I added them to the core library.
+
+.SH DIAGNOSTICS
+Some fatal errors are caught by the library.  If one occurs,
+a short message is written to file descriptor 2 (stderr) and
+a segmentation violation is generated.
+.TP
+.B coro: coroutine deletes itself
+A coroutine has called
+.B co_delete
+with it's own handle.
+.TP
+.B coro: resume to deleted coroutine
+A coroutine has deleted itself with
+.BR co_exit " or " co_exit_to
+and the coroutine that was activated by the exit tried a
+.BR co_resume .
+.TP
+.B coro: stale coroutine called
+Someone tried to active a coroutine that has already been
+deleted.  This error is only detected, if the stack of the
+deleted coroutine is still resident in memory.
+
+.SH SEE ALSO
+A good book about coroutines *g*
+
+.SH BUGS
+There are no known bugs.  But, this library is still
+in development.  Especially, it's only implemented
+for x86/Linux and FreeBSD yet.  Later implementations
+for other architectures may require some redefinitions.
+
+Obbug: These routines should be in libc *g*
+
+Bug reports and comments to
+.BR froese@gmx.de .

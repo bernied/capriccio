@@ -1,0 +1,52 @@
+#!/bin/sh
+
+[ `uname -n` != "donald" ] && {
+    echo "this isn't meant for you..."
+    exit 1
+}
+
+# create a tarball, lsm, and docu files for a new distribution.
+# this one isn't portable at all.  it replicates some parts of
+# the makefiles and just works on my machine.
+
+D=/root/exit/coro
+
+set -e
+
+[ -f Makefile ] && make distclean
+
+# get version from Makefile.in
+eval `grep "^VERSION=.*$" configure`
+
+echo "creating dist-files of $VERSION in $D..."
+
+# build tarball
+cd ..
+ln -s coro coro-$VERSION
+tar cfz $D/coro-$VERSION.tar.gz coro-$VERSION/*
+rm coro-$VERSION
+cd coro
+
+# get tar size and date
+set -- `du -h $D/coro-$VERSION.tar.gz`
+SIZE=$1
+DATE=`date +%d%b%y`
+
+# create lsm
+sed -e "s,@VERSION@,$VERSION,g" \
+    -e "s,@SIZE@,$SIZE,g" \
+    -e "s,@DATE@,$DATE,g" \
+    coro.lsm.in >$D/coro-$VERSION.lsm
+
+# copy doku
+cp CHANGELOG $D/changes
+cp PORTING $D/porting
+
+# create html man page
+sed -e "s,@VERSION@,$VERSION,g" coro.man.in | nroff -man | {
+    echo "<HTML><HEAD><TITLE>C Coroutines</TITLE></HEAD><BODY>"
+    man2html -bare -uelem U -nodepage
+    echo "</B0DY></HTML>"
+} | sed -e "s,</B> <B>, ,g" -e "s,</U> <U>, ,g" >$D/coro.html
+
+echo "done."

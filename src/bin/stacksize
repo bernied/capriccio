@@ -1,0 +1,407 @@
+#!/usr/bin/perl
+
+use strict;
+
+my $debug = 0;
+
+#########################################################################
+# Classify instructions.
+
+# Instrs in this hash have no implicit effect on esp.
+my %harmless =
+    ( leal => 1,
+      movl => 1, movw => 1, movb => 1,
+      movsl => 1, movsw => 1,
+      movsbl => 1, movsbw => 1, movswl => 1,
+      movzwl => 1, movzbl => 1, movzbw => 1,
+      adcl => 1,
+      addl => 1, addw => 1, addb => 1, subl => 1, subb => 1, sbbl => 1,
+      mull => 1, divl => 1,
+      incl => 1, incw => 1, incb => 1, decl => 1, decw => 1, decb => 1,
+      negl => 1, negb => 1, notl => 1, notb => 1,
+      imull => 1, idivl => 1,
+      andl => 1, andw => 1, andb => 1,
+      orl => 1, orw => 1, orb => 1,
+      xorl => 1, xorw => 1, xorb => 1,
+      sarl => 1, sarb => 1, sall => 1, salb => 1,
+      shrl => 1, shrw => 1, shrb => 1,
+      shrdl => 1,
+      shldl => 1,
+      roll => 1, rorw => 1,
+      cmpl => 1, cmpw => 1, cmpb => 1, cmpsb => 1,
+      testl => 1, testw => 1, testb => 1,
+      btl => 1, btsl => 1,
+      rep => 1, repnz => 1, repz => 1,
+      stosl => 1, stosw => 1, stosb => 1,
+      scasb => 1,
+      cld => 1,
+      cltd => 1, cwtl => 1, cbtw => 1,
+      call => 1, ret => 1,
+      sete => 1, setne => 1, setg => 1, setle => 1, setb => 1,
+      fld => 1, flds => 1, fldl => 1, fldt => 1,
+      fldz => 1, fld1 => 1, fldcw => 1,
+      fildl => 1, fildll => 1, fistpl => 1, fistpll => 1,
+      fchs => 1,
+      fmul => 1, fmuls => 1, fmull => 1, fmulp => 1,
+      fdiv => 1, fdivs => 1, fdivp => 1, fdivrp => 1,
+      fsub => 1, fsubl => 1,faddl => 1, faddp => 1, fsubrp => 1,
+      fsts => 1, fstl => 1,
+      fstp => 1, fstps => 1, fstpl => 1, fstpt => 1,
+      fcom => 1, fcoms => 1, fcoml => 1,
+      fcomp => 1, fcomps => 1, fcompl => 1, fcompp => 1,
+      fucom => 1, fucomp => 1, fucompp => 1,
+      fxch => 1,
+      fnstsw => 1, fnstcw => 1,
+      nop => 1 );
+
+# All branches/jumps.
+my %jumps =
+    ( jmp => 1, je => 1, jne => 1, jl => 1, jle => 1, jg => 1, jge => 1,
+      ja => 1, jae => 1, jb => 1, jbe => 1, js => 1, jns => 1,
+      jz => 1, jnz => 1, jc => 1, jnc => 1 );
+
+# All unconditional branches/jumps.
+my %uncondjumps =
+    ( jmp => 1, ret => 1 );
+
+# All functions that don't return.
+# TODO: Find a better way to handle app-specific noreturn.
+my %noreturn =
+    ( exit => 1, abort => 1, __assert_fail => 1, clean_child_exit => 1 );
+
+#########################################################################
+# Perform analysis.
+
+my %function_rets;
+
+my $errors = 0;
+
+my $file = shift @ARGV;
+
+# Scan the file once to figure out the return call conventions.
+open FILE, $file;
+my $function = &process_header();
+while (defined($function))
+{
+    $function = &process_function_ret($function);
+}
+close FILE;
+
+# Scan the file again to figure out the maximum stack size.
+open FILE, $file;
+my $function = &process_header();
+while (defined($function))
+{
+    $function = &process_function($function);
+}
+close FILE;
+
+if ($errors > 0)
+{
+    die "stacksize: errors occurred during processing\n";
+}
+
+#########################################################################
+# Helpers.
+
+# Find the first function.
+sub process_header
+{
+    my $nextfun;
+
+    while (!defined($nextfun) && (my $line = <FILE>))
+    {
+        if ($line =~ /\s*\.type\s+([^,]+),\@function/)
+        {
+            $nextfun = $1;
+        }
+    }
+
+    return $nextfun;
+}
+
+# Find all ret instructions and figure out how much they pop from the stack.
+sub process_function_ret
+{
+    my ($function) = @_;
+
+    my $nextfun;
+    my $ret;
+
+    while (!defined($nextfun) && (my $line = <FILE>))
+    {
+        if ($line =~ /\s*\.type\s+([^,]+),\@function/)
+        {
+            $nextfun = $1;
+        }
+        elsif ($line =~ /^\s+ret( \$(\d+))?/)
+        {
+            if (!defined($ret))
+            {
+               $ret = $2;
+            }
+            elsif ($ret != $2)
+            {
+                die "function $function has inconsistent returns\n";
+            }
+        }
+    }
+
+    $function_rets{$function} = $ret;
+
+    return $nextfun;
+}
+
+# Internal representation of current function.
+my @instrs;
+my %labels;
+
+# Global state shared during depth-first search.
+my @dfsvisit;
+my @stacksize;
+
+# Examine all instructions to determine the maximum stack depth.
+# At each program point (i.e., instruction), the stack depth should be
+# constant.  So, we make our way through the instructions, keeping
+# track of the current stack depth at each instruction.  If control is
+# transferred to an instruction we've already seen, then verify that
+# the stack depth is the same as before.
+sub process_function
+{
+    my ($function) = @_;
+
+    my $nextfun;
+
+    # Clear info for this function.
+    @instrs = ();
+    %labels = ();
+    @dfsvisit = ();
+    @stacksize = ();
+
+    # Get all the instructions.
+    while (!defined($nextfun) && (my $line = <FILE>))
+    {
+        if ($line =~ /\s*\.type\s+([^,]+),\@function/)
+        {
+            $nextfun = $1;
+        }
+        elsif ($line =~ /^([\.\w]+):/)
+        {
+            $labels{$1} = scalar(@instrs);
+        }
+        elsif ($line =~ /^\s+(\w+(\s\S+)?)/)
+        {
+            push @instrs, $1;
+        }
+    }
+
+    # Initialize stack sizes.
+    for (my $i = 0; $i < scalar(@instrs); $i++)
+    {
+        $stacksize[$i] = undef;
+        $dfsvisit[$i] = 0;
+    }
+
+    # We start at instruction 0 with stack depth 0.
+    my $startinstr = 0;
+    $stacksize[$startinstr] = 0;
+    &dfs($startinstr);
+
+    # Find the maximum stack depth for this function.
+    my $max = 0;
+    for (my $i = 0; $i < scalar(@instrs); $i++)
+    {
+        my $size = $stacksize[$i];
+
+        if ($size < 0)
+        {
+            die "negative stack size at fun $function instr $i\n";
+        }
+
+        if ($size > $max)
+        {
+            $max = $size;
+        }
+    }
+
+    # Find the amount of space reserved for locals only.
+    my $local = 0;
+    if ($instrs[2] =~ /^subl \$(\d+),\%esp/)
+    {
+        $local = $1;
+    }
+
+    # Add extra space to stack for:
+    #  - call instr's implicit push
+    #  - three locals added for each checkpoint
+    #  - arguments for checkpoint fucntions
+    #  - good luck
+    $max += 64;
+
+    # All done!
+    print "$max:$local:$function\n";
+
+    return $nextfun;
+}
+
+# Perform a recursive depth-first traversal of the function control
+# graph from node i.
+sub dfs
+{
+    my ($i) = @_;
+
+    # Some sanity checks.
+    if ($i < 0 || $i >= scalar(@instrs))
+    {
+        die "instr index out of bounds: $i\n";
+    }
+
+    if ($dfsvisit[$i] != 0)
+    {
+        die "error in dfs\n";
+    }
+
+    # We're officially processing this node.
+    $dfsvisit[$i] = 1;
+
+    # Status goes here: assume success.
+    my $result = 1;
+
+    # Find the opcode.
+    my $instr = $instrs[$i];
+    my $opcode = $instr;
+    $opcode =~ s/\s.*//;
+
+    my @succs;
+    my $newsize = $stacksize[$i];
+
+    if ($newsize < 0)
+    {
+        die "bad stack size for instr: $i\n";
+    }
+
+    # Determine how this instr affects the stack, if at all.
+    if ($instr =~ /^pushl /)
+    {
+        $newsize += 4;
+        print "pushl\n" if $debug;
+    }
+    elsif ($instr =~ /^popl / ||
+           $instr =~ /^leave$/)
+    {
+        $newsize -= 4;
+        print "popl\n" if $debug;
+    }
+    elsif ($instr =~ /^addl \$([-\d]+),\%esp/)
+    {
+        $newsize -= $1;
+        print "addl $1\n" if $debug;
+    }
+    elsif ($instr =~ /^subl \$([-\d]+),\%esp/)
+    {
+        $newsize += $1;
+        print "subl $1\n" if $debug;
+    }
+    elsif ($instr =~ /^leal ([-\d]+)\(\%ebp\),\%esp/)
+    {
+        $newsize = 4 - $1;
+        print "leal $newsize\n" if $debug;
+    }
+    elsif ($instr =~ /^call (\w+)/)
+    {
+        $newsize -= $function_rets{$1};
+        print "call $newsize\n" if $debug;
+    }
+    elsif ($instr =~ /^call [^\*]/)
+    {
+        print STDERR "unrecognized call: $instr\n";
+        $errors++;
+        $result = 0;
+    }
+    elsif ($jumps{$opcode})
+    {
+        my $dest = $instr;
+        $dest =~ s/[^ ]* //;
+
+        my $succ = $labels{$dest};
+        if (defined($succ))
+        {
+            push @succs, $succ;
+        }
+        else
+        {
+            print STDERR "unrecognized label: $instr\n";
+            $errors++;
+            $result = 0;
+        }
+    }
+    elsif (($instr =~ /^movl \%esp,/) ||
+           ($harmless{$opcode} && $instr !~ /[^\(]\%esp/))
+    {
+        print "harmless: $instr\n" if $debug;
+    }
+    else
+    {
+        print STDERR "unrecognized instruction: $instr\n";
+        $errors++;
+        $result = 0;
+    }
+
+    # Sanity check.
+    if ($newsize < 0)
+    {
+       die "negative stack size\n";
+    }
+
+    # If we're not an unconditional jump or a call to a function
+    # that doesn't return, make the next instruction a successor.
+    if ((!defined($uncondjumps{$opcode})) &&
+        (!($instr =~ /^call (\w+)$/ && defined($noreturn{$1}))))
+    {
+        if ($i + 1 >= scalar(@instrs))
+        {
+            print STDERR "fallthrough at end of function: $instr\n";
+            $errors++;
+            $result = 0;
+        }
+
+        push @succs, ($i + 1);
+    }
+
+    # Set/check the stack depth for each successor.
+    foreach my $succ (@succs)
+    {
+        my $cursize = $stacksize[$succ];
+
+        # If we're increasing our estimate for this node (or we've
+        # never seen it before), we need to process it.
+        if ((!defined($cursize)) || ($cursize < $newsize))
+        {
+            if (!$dfsvisit[$succ])
+            {
+                # No loop, so process the successor recursively.
+                $stacksize[$succ] = $newsize;
+                print "  $succ is $newsize\n" if $debug;
+
+                if (!&dfs($succ))
+                {
+                    # An error occurred, so we bail.
+                    $result = 0;
+                }
+            }
+            else
+            {
+                # We found a loop where the stack size can gorw to
+                # infinity!  Can't handle this...
+                print STDERR "unbounded stack in $function\n";
+                $errors++;
+                $result = 0;
+            }
+        }
+    }
+
+    # We're done with this instruction.
+    $dfsvisit[$i] = 0;
+
+    return $result;
+}

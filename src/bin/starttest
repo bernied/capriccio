@@ -1,0 +1,62 @@
+#!/usr/bin/perl
+######################################################################
+#
+#  Collect a bunch of stats, for a test run
+#
+#
+######################################################################
+use strict;
+$| = 1;
+
+my $test = shift;
+$test = getVal("Test name", "") if($test eq "");
+
+my $day = `date +"\%Y-\%m\%d-%H%M"`; chomp $day;
+my $dir = "/results/$test-$day";
+
+print print "test dir is $dir\n"; 
+
+
+# create the test output directory
+mkdir($dir) || die "mkdir $dir failed: $!";
+chdir($dir) || die "chdir $dir failed: $!";
+
+# dump some general information
+print "dumping general system info\n";
+system("ps -ef > server.ps");
+system("uname -a > server.uname");
+system("free > server.free");
+system("ifconfig -a > server.ifconfig");
+system("date > server.date");
+system("env > server.env");
+
+
+# start sysstat
+print "killing old sar, sadc, and iostat processes\n";
+system("killall sar sadc iostat 2>/dev/null");
+sleep(1);
+system("killall -9 sar sadc iostat 2>/dev/null");
+
+print "starting up sar and iostat\n";
+system("sar -o sar.dat 1 0 & ");
+system("iostat -t 1 -x sda sdb sdc sdd sde > iostat.txt & ");
+
+
+######################################################################
+# useful subroutines
+######################################################################
+
+sub getVal($$)
+{
+    my ($msg, $default) = @_;
+
+    if ($default eq "") {
+        print "$msg:  ";
+    } else {
+        print "$msg [$default]:  ";
+    }
+
+    my $val = <STDIN>;
+    chomp($val);
+    return $val;
+}

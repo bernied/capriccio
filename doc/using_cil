@@ -1,0 +1,135 @@
+
+----------------------------------------------------------------------
+From: Jeremy Condit <jcondit@eecs.berkeley.edu>
+Date: ????
+
+[cc'ing all because the last couple paragraphs may be of interest]
+
+Rob,
+
+I've checked in some code to compute a blocking graph.  It's pretty basic
+right now--it just computes the graph and then prints it out.  Let me know
+what additional output (or program transformations) would be helpful.  In
+the meantime, I'll be working on stack size issues.
+
+Functions that yield are annotated as follows:
+  int read(...) __attribute__((yield));
+This annotation means that any calls to this function will be considered a
+blocking point.  The graph will treat each call site as a separate
+blocking point.  I also use the "noreturn" annotation to indicates the
+special "end" node; this annotation is already present in the glibc
+headers.  The start point is a function called "thread_main", so you
+either need to add this function or tweak the code (at the very end of
+src/ext/blockinggraph.ml).  Function pointer handling may be a bit flaky.
+
+To use this code, check out the latest cil tree.  In your Makefile:
+  CC = $(CCUREDHOME)/bin/cilly --merge --dumpFCG --makeCFG
+If you tell me where the new knot repository lives, I can check in a new
+Makefile.
+
+Currently, the biggest problem is that the graph for knot (with
+read/write/accept as blocking points) is completely connected.  :-)
+There are a couple of reasons for this:
+
+1. knot's code uses lots of while loops with a "done" variable.  Thus,
+   there is often an edge in the control flow graph around any given
+   blocking point.  A pretty simple solution is to use do-while loops
+   instead.
+
+2. Error checking code often results in edges that are rarely (if ever)
+   used during normal execution.  Perhaps we could add an annotation along
+   such paths that indicates that they are not often used and thus should
+   be included as secondary edges in the graph.
+
+J
+
+
+
+
+----------------------------------------------------------------------
+From: Jeremy Condit <jcondit@eecs.berkeley.edu>
+Date: ????
+
+
+Rob,
+
+FYI, I checked in a new version.  There are a couple improvements:
+
+- Function pointers are categorized by type, which allows them to be
+  handled cleanly without throwing off the whole analysis.  For now, I
+  rely on the programmer to avoid casting these function pointers to the
+  wrong type.
+
+- There's a new attribute called "start" that identifies functions that
+  are the first to be called in a thread.  The analysis will print the
+  call graph and blocking graph starting from each of these nodes.  So, to
+  get the same effect as the earlier version, you'd add the following
+  declaration:
+
+    void *thread_main(void *) __attribute__((start));
+
+J
+
+
+----------------------------------------------------------------------
+From: Jeremy Condit <jcondit@eecs.berkeley.edu>
+Date: Mon, 03 Mar 2003 16:37:00 -0800
+
+Rob,
+
+I checked in code that should instrument your program as desired.  Here's
+what you need to do:
+
+1. Annotate the function where analysis should begin with
+   __attribute__((start)).  Currently you're only allowed to have one of
+   these.  Annotations go on function declarations.  For example:
+
+     void thread_main(void) __attribute__((start));
+
+2. Annotate any blocking functions (e.g., read, write, accept) with
+   __attribute__((yield)).
+
+3. Annotate any end functions with __attribute__((noreturn)).  (This is
+   already done for functions like exit().)
+
+4. If you wish to expand a node in the top-down analysis, add
+   __attribute__((expand)).  You'll have to do this for the start node at
+   the very least.
+
+Now run CIL on the program.  Check out the current CIL repository:
+
+  cvs -d manju:/home/cvs-repository co cil
+
+You'll need to set Makefile variables like so:
+
+  CILLY="/path/to/cil/bin/cilly --merge --disallowDuplication"
+  CC="$(CILLY)"
+  AR="$(CILLY) --mode=AR"
+  LD="$(CILLY) --doFCG --makeCFG"
+
+You may need to change the Makefile to use $(AR) and $(LD) where
+appropriate.  This causes all intermediate compilation to simply merge
+source code; only the final pass (i.e., $(LD)) will analyze and compile.
+
+The call graph and blocking graph will be printed to stdout, and your
+program will be instrumented with the following calls:
+
+  init_blocking_graph([nodes in bg]);
+    at the beginning of main()
+
+  before_bg_node([node num], [edges out]);
+    right before each node
+
+I decided to use "before_bg_node" instead of "update_bg_node", since it's
+clearer and allows for later introduction of "after_bg_node".  I also have
+the destination of each edge available, but I haven't implemented that
+part yet.
+
+Note that node 0 is always the special end node and node 1 is always the
+start node.  There are no before_bg_node() calls corresponding to these
+nodes; if this is a problem (or if you have any other questions or
+suggestions), let me know.
+
+Cheers,
+Jeremy
+

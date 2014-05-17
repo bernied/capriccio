@@ -1,0 +1,34 @@
+Mon Jun 26 21:29:04 MEST 2000	(1.1.0-pre1)
+
+    - Corrected some typos.
+    - Put an advise to use sigaltstack into man page.
+    - Generation of asm-names by macro.  Newer FreeBSDs seems
+      to not require the leading _.  Thanks to Kelly Yancey
+      <kbyanc@posi.net>.  Difference between linux and freebsd
+      is now only 2 lines but I keep the different dirs.
+
+Thu Jul  8 21:34:25 MEST 1999
+
+    - Use MAP_ANON instead of MAP_ANONYMOUS in arch/x86-linux.
+    - Got arch/x86-freebsd from Sam Rushing <rushing@nightmare.com>
+      (The only difference to x86-linux is an _ for function names.)
+
+Fri Feb 26 17:50:43 MET 1999	(1.0.3)
+
+    - Fixed alignment bug in co_create/co_delete  :-/
+    - Added test: preservation of floating point registers
+    - Added test: passing bad aligned application stack
+
+Thu Feb 25 22:16:01 MET 1999	(1.0.2)
+
+    - Added INSTALL, PORTING, CREDITS
+
+Mon Feb 24 16:08:57 MET 1999	(1.0.1)
+
+    - Remade build process for multiple architectures
+    - Some changes to the man page
+    - added sample directory
+
+Fri Feb 19 18:49:48 MET 1999	(1.0.0)
+
+    - First release.  x86/linux only.

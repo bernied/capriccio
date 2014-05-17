@@ -1,0 +1,96 @@
+// after several SIGPIPE's are received
+
+digraph foo {
+
+    rankdir=LR;
+    ratio=compress;
+    margin="0,0";
+    ranksep=0.0005; 
+    nodesep=0.1; 
+    ordering=out
+    node [shape=ellipse style=filled fillcolor="#e0e0e0"];
+    node [fontsize=10 height=.1 width=.1];
+    edge [fontsize=7 arrowsize=.8];
+
+   1 
+   2 
+   3 
+   4 
+   5 
+   6 
+   7 
+   8 
+   9 
+  10 
+  11 
+  12 
+  13 
+  14 
+  15 
+  16 
+  17 
+  18 
+  19 
+  20 
+  21 
+  22 [fontcolor="red" label="\N, t=1 "]
+  23 
+  24 [fontcolor="red" label="\N, t=1 "]
+  25 
+  26 
+  27 
+  28 
+  29 
+  30 [fontcolor="red" label="\N, t=10 "]
+  31 [fontcolor="red" label="\N, t=1 "]
+  32 
+  33 
+  34 
+  35 
+
+  2 -> 2        [label = " num 1     \l cpu 981168     \l stk 0     \l fds 0     \l "]
+  2 -> 3        [label = " num 1     \l cpu 6021978     \l stk -432     \l fds 0     \l "]
+  12 -> 13      [label = " num 1     \l cpu 31192     \l stk 0     \l fds 0     \l "]
+  18 -> 19      [label = " num 1     \l cpu 20232     \l stk 0     \l fds 0     \l "]
+  28 -> 33      [label = " num 23     \l cpu 439378     \l stk -128     \l fds 0     \l "]
+  28 -> 30      [label = " num 763     \l cpu 392768     \l stk 832     \l fds 0     \l "]
+  35 -> 26      [label = " num 5     \l cpu 17412     \l stk -48     \l fds 0     \l "]
+  35 -> 27      [label = " num 734     \l cpu 35450     \l stk -128     \l fds 0     \l "]
+  1 -> 2        [label = " num 1     \l cpu 6065820     \l stk 9024     \l fds 0     \l "]
+  3 -> 4        [label = " num 1     \l cpu 405724     \l stk 432     \l fds 0     \l "]
+  3 -> 3        [label = " num 4     \l cpu 943112     \l stk 0     \l fds 0     \l "]
+  30 -> 30      [label = " num 3     \l cpu 484450     \l stk 0     \l fds 0     \l "]
+  30 -> 32      [label = " num 753     \l cpu 81953     \l stk -208     \l fds 0     \l "]
+  31 -> 35      [label = " num 739     \l cpu 2463     \l stk 96     \l fds 0     \l "]
+  11 -> 12      [label = " num 1     \l cpu 20128     \l stk 0     \l fds 0     \l "]
+  4 -> 5        [label = " num 1     \l cpu 1130904     \l stk -432     \l fds 0     \l "]
+  4 -> 4        [label = " num 1     \l cpu 781612     \l stk 0     \l fds 0     \l "]
+  29 -> 27      [label = " num 46     \l cpu 3952     \l stk -32     \l fds 0     \l "]
+  6 -> 7        [label = " num 1     \l cpu 1260246     \l stk -8304     \l fds 0     \l "]
+  7 -> 8        [label = " num 1     \l cpu 1577266     \l stk 8320     \l fds 0     \l "]
+  25 -> 28      [label = " num 786     \l cpu 2154     \l stk 96     \l fds 0     \l "]
+  21 -> 22      [label = " num 1     \l cpu 177764     \l stk -8736     \l fds 0     \l "]
+  9 -> 10       [label = " num 1     \l cpu 19688     \l stk 0     \l fds 0     \l "]
+  33 -> 25      [label = " num 739     \l cpu 5675     \l stk 32     \l fds 0     \l "]
+  16 -> 17      [label = " num 1     \l cpu 19968     \l stk 0     \l fds 0     \l "]
+  17 -> 18      [label = " num 1     \l cpu 19972     \l stk 0     \l fds 0     \l "]
+  20 -> 21      [label = " num 1     \l cpu 20420     \l stk 0     \l fds 0     \l "]
+  22 -> 22      [label = " num 268070996     \l cpu 1576     \l stk 0     \l fds 0     \l "]
+  14 -> 15      [label = " num 1     \l cpu 21844     \l stk 96     \l fds 0     \l "]
+  15 -> 16      [label = " num 1     \l cpu 20184     \l stk 0     \l fds 0     \l "]
+  10 -> 11      [label = " num 1     \l cpu 19584     \l stk 0     \l fds 0     \l "]
+  34 -> 25      [label = " num 37     \l cpu 2897     \l stk 0     \l fds 0     \l "]
+  13 -> 14      [label = " num 1     \l cpu 34384     \l stk 0     \l fds 0     \l "]
+  23 -> 24      [label = " num 1     \l cpu 641908     \l stk 256     \l fds 0     \l "]
+  23 -> 26      [label = " num 1     \l cpu 103780     \l stk 544     \l fds 0     \l "]
+  23 -> 25      [label = " num 10     \l cpu 29364     \l stk 480     \l fds 0     \l "]
+  8 -> 9        [label = " num 1     \l cpu 21700     \l stk 0     \l fds 0     \l "]
+  26 -> 27      [label = " num 6     \l cpu 24498     \l stk -80     \l fds 0     \l "]
+  32 -> 34      [label = " num 37     \l cpu 25205     \l stk -720     \l fds 0     \l "]
+  32 -> 33      [label = " num 716     \l cpu 40063     \l stk -752     \l fds 0     \l "]
+  19 -> 20      [label = " num 1     \l cpu 20812     \l stk 0     \l fds 0     \l "]
+  27 -> 29      [label = " num 46     \l cpu 44065     \l stk 32     \l fds 0     \l "]
+  27 -> 31      [label = " num 740     \l cpu 4114     \l stk 32     \l fds 0     \l "]
+  5 -> 5        [label = " num 4     \l cpu 923553     \l stk 0     \l fds 0     \l "]
+  5 -> 6        [label = " num 1     \l cpu 2727580     \l stk 112     \l fds 0     \l "]
+}

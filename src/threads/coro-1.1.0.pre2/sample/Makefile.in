@@ -1,0 +1,41 @@
+#
+# Sample makefile
+#
+# The following targets must be present:
+#   all:	should build the library and the header file
+#   install:	build the man page and install the lib in @LINST@,
+#		the header file in @HINST@ and the man page in @MINST@.
+#   clean:	clean up everything you made
+#
+# The following symbols may be used:
+#   @VERSION@	the version number
+#   @TOPDIR@	where the current build takes place
+#   @ARCH@	path to the selected architecture dir
+#   @MANSRC@	name of the manual page
+#   @LINST@	path where the library should be installed
+#   @HINST@	path where the header file should be installed
+#   @MINST@	path where the manual page should be installed
+#
+
+CFLAGS=-O2 -Wall
+
+MAN=@MANSRC@
+LINST=@LINST@
+HINST=@HINST@
+MINST=@MINST@
+
+all: libcoro.a
+
+libcoro.a: coro.o
+	rm -f $@
+	ar rcs $@ coro.o
+
+coro.o: coro.h
+
+install: libcoro.a coro.h $(MAN)
+	install -m 644 libcoro.a $(LINST)/libcoro.a
+	install -m 644 coro.h $(HINST)/coro.h
+	install -m 644 $(MAN) $(MINST)/man2/coro.2
+
+clean:
+	rm -f libcoro.a coro.o

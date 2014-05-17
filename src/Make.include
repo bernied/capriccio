@@ -1,0 +1,133 @@
+#-*-makefile-*-
+
+##################################################
+# set defaults.  See Make.opts.sample for more info
+##################################################
+
+# compiler behavior
+OPTIMIZE = -O0 -g
+GPROF    = 
+
+
+SRCDIR := $(shell perl -e ' `pwd` =~ m!^(.*/[^/]*capriccio[^/]*/[^/]+)/.*$$!; print $$1, "\n";' )
+ifeq ($(SRCDIR)_x,_x)
+SRCDIR := .
+endif
+CHECKOPTS := $(shell if [ ! -f $(SRCDIR)/Make.opts ]; then touch $(SRCDIR)/Make.opts; fi)
+include $(SRCDIR)/Make.opts
+
+
+
+##################################################
+# some vars, to help make sure we rebuild if makefiles change
+##################################################
+MAKEDEPS = $(SRCDIR)/Make.include $(SRCDIR)/Make.opts Makefile
+
+
+# munge debug defs
+DEBUGOPTS := $(patsubst %.c, %_c, $(DEBUGFILES))
+DEBUGOPTS := $(addprefix -DDEBUG_, $(DEBUGOPTS))
+
+
+##################################################
+# locations of sub-libs
+##################################################
+
+UTIL = $(SRCDIR)/util
+LIBUTIL	= $(UTIL)/libutil.a
+
+STACK = $(SRCDIR)/stack
+LIBSTACK = $(STACK)/libstack.a
+
+THREAD = $(SRCDIR)/threads
+LIBTHREAD = $(THREAD)/libthread.a
+
+ifeq '$(USE_IO_LIB)' 'nio'
+  AIO = $(SRCDIR)/nio
+else
+  AIO = $(SRCDIR)/aio
+endif
+
+LIBAIO = $(AIO)/libasyncio.a
+
+
+##################################################
+# set up optional libs
+##################################################
+
+ifeq '$(USE_PERFCTR)' '1'
+PERFCTRLIB = -lperfctr
+#PERFCTR_STATIC_LIB = /usr/lib/libperfctr-debug.a
+PERFCTR_STATIC_LIB = /usr/lib/libperfctr.a
+endif
+
+
+
+##################################################
+# The compiler command
+##################################################
+
+CFLAGS :=  $(DEBUGOPTS) -I$(SRCDIR)/include $(COMMONFLAGS)
+ifeq '$(USE_PERFCTR)' '1'
+CFLAGS += -DUSE_PERFCTR
+endif
+
+
+PCFLAGS := 
+
+ifeq '$(CC)_x' '_x'
+CC := gcc
+endif
+CC := $(CC) -D_REENTRANT -Werror -W -Wall $(GPROF) $(OPTIMIZE)
+
+CCURED_FLAGS = --allowInlineAssembly
+ifndef YESCURE
+CCURED_FLAGS += --nocure
+endif
+ifdef NOMERGE
+CCURED_FLAGS += --nomerge
+endif
+ifdef USE_CCURED
+ifdef CCUREDHOME
+CC = $(CCUREDHOME)/bin/ccured $(CCURED_FLAGS) -I$(CCUREDHOME)/include
+AR = $(CCUREDHOME)/bin/ccured --mode=AR
+CFLAGS += -DUSE_CCURED
+endif
+endif
+
+
+LD := $(CC) -lm
+
+
+ifeq '$(USE_IO_LIB)' 'nio'
+CFLAGS += -DUSE_NIO
+endif
+
+##################################################
+# set up targets
+##################################################
+
+# the default - so we can set the real one in the local Makefile
+first_target: all
+
+# so Make won't be confused if the file gets created
+.PHONY: all clean countlines
+
+
+##################################################
+# count lines
+##################################################
+
+# files to skip when doing line counts
+ifeq ($(COUNTLINES_SKIP)_x,_x)
+COUNTLINES_SKIP = nosuchfile
+endif
+
+COUNTLINES_SKIP_REGEX = $(shell perl -e '@skip=qw($(COUNTLINES_SKIP)); print join("|", @skip), "\n";')
+
+countlines:
+	$(SRCDIR)/bin/linecount `find ./ -name '*.[ch]' | egrep -v "$(COUNTLINES_SKIP_REGEX)"`
+
+
+
+

@@ -1,0 +1,87 @@
+	INSTALLATION INSTRUCTIONS FOR THE CORO LIBRARY
+		E.Toernig	   25.Feb.1999
+
+The short instructions:
+
+	./configure
+	make
+	make test
+	make -n install
+	make install
+
+The longer ones *g*:
+
+	Run the configure script.  It will try to determine
+	your system and will generate the makefiles.
+
+	If it is unable to auto detect your system, run
+
+		./configure --help
+
+	It will show you the supported architectures.  Select
+	one with
+
+		./configure --arch <archname>
+
+	There are additional options to select the installation
+	directories:
+
+	    --prefix <dir>
+		Changes the common installation prefix. The
+		default is /usr/local.
+
+	    --library <dir>
+		Directory where the library libcoro.a is
+		installed.  Default is <prefix>/lib.
+
+	    --include <dir>
+		Directory where the header file coro.h is
+		installed.  Default is <prefix>/include.
+
+	    --manual <dir>
+		Directory where the man page is installed.
+		Default is <prefix>/man.  The complete
+		path is system dependant.  Normally,
+		the it is installed as <mandir>/man2/coro.2.
+
+	Next step is to compile the library:
+
+	    make
+
+	It should succeed without errors.  Now there are
+	two files in the arch directory: libcoro.a and coro.h.
+	These are needed by the next step which is compiling
+	and running the test program:
+
+	    make test
+
+	If it finishes with "Test passed" everything is fine
+	and you can proceed installing the library.  If it
+	fails you are on your own *g*.
+
+	To check the installation directories you may want to
+	run
+
+	    make -n install
+
+	and if it is all right the last step:
+
+	    make install
+
+	This installs three files: libcoro.a, coro.h, and
+	the coro man page (normally coro.2).
+
+
+Cleaning up:
+
+	To remove all temporary files execute
+	
+	    make clean
+
+	To clean up everything (including the Makefiles):
+
+	    make distclean
+
+
+
+Happy hacking, ET.

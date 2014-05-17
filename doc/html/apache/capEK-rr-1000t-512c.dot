@@ -1,0 +1,113 @@
+digraph foo {
+  ratio=compress
+  margin="0,0"
+  nodesep=0.1
+  ranksep=0.001
+  rankdir=LR
+  ordering=out
+  node [shape=ellipse style=filled fillcolor="#e0e0e0" color=black]
+  node [label="\N" fontsize=10 height=.1 width=.1]
+  edge [fontsize=7 arrowsize=.8]
+  
+  // NODES
+    0
+    1
+    2
+    3
+    4
+    5
+    6
+    7
+    8
+    9
+   10
+   11
+   12
+   13
+   14
+   15
+   16
+   17
+   18
+   19
+   20
+   21
+   22
+   23
+   24
+   25
+   26     [label="\N (1t)" fontcolor="red"]
+   27
+   28     [label="\N (1t)" fontcolor="red"]
+   29     [label="\N (1000t)" fontcolor="red"]
+   30     [label="\N (1t)" fontcolor="red"]
+   31
+   32
+   33
+   34
+   35
+   36
+   37
+   38
+  
+  // EDGES
+    0 ->  27     [ label = " num 1002     \l cpu 326071451438031     \l stk 1007559     \l fds 0     \l"  ]
+    0 ->   1     [ label = " num 1     \l cpu 326071311496972     \l stk 1073744656     \l fds 0     \l"  ]
+    1 ->   2     [ label = " num 1     \l cpu 6939860     \l stk 8960     \l fds 0     \l"  ]
+    2 ->   2     [ label = " num 1     \l cpu 810084     \l stk 0     \l fds 0     \l"  ]
+    2 ->   3     [ label = " num 1     \l cpu 505104     \l stk -8128     \l fds 0     \l"  color=green ]
+    3 ->   3     [ label = " num 1     \l cpu 37708     \l stk 0     \l fds 0     \l"  ]
+    3 ->   4     [ label = " num 1     \l cpu 2853980     \l stk 9408     \l fds 0     \l"  ]
+    4 ->   5     [ label = " num 1     \l cpu 423660     \l stk -8048     \l fds 0     \l"  color=green ]
+    4 ->   4     [ label = " num 1     \l cpu 33912     \l stk 0     \l fds 0     \l"  ]
+    5 ->   5     [ label = " num 1     \l cpu 16016     \l stk 0     \l fds 0     \l"  ]
+    5 ->   6     [ label = " num 1     \l cpu 2096748     \l stk 6336     \l fds 0     \l"  ]
+    6 ->   7     [ label = " num 1     \l cpu 339100     \l stk 432     \l fds 0     \l"  ]
+    6 ->   6     [ label = " num 4     \l cpu 794079     \l stk 0     \l fds 0     \l"  ]
+    7 ->   7     [ label = " num 1     \l cpu 692380     \l stk 0     \l fds 0     \l"  ]
+    7 ->   8     [ label = " num 1     \l cpu 1071356     \l stk -432     \l fds 0     \l"  color=green ]
+    8 ->   8     [ label = " num 4     \l cpu 780366     \l stk 0     \l fds 0     \l"  ]
+    8 ->   9     [ label = " num 1     \l cpu 1216408     \l stk 976     \l fds 0     \l"  ]
+    9 ->  10     [ label = " num 1     \l cpu 141500     \l stk -816     \l fds 0     \l"  color=green ]
+   10 ->  11     [ label = " num 1     \l cpu 139728     \l stk -8288     \l fds 0     \l"  color=green ]
+   11 ->  12     [ label = " num 1     \l cpu 17383428     \l stk 8304     \l fds 0     \l"  ]
+   12 ->  13     [ label = " num 1     \l cpu 21260     \l stk 0     \l fds 0     \l"  ]
+   13 ->  14     [ label = " num 1     \l cpu 16404     \l stk 0     \l fds 0     \l"  ]
+   14 ->  15     [ label = " num 1     \l cpu 15624     \l stk 0     \l fds 0     \l"  ]
+   15 ->  16     [ label = " num 1     \l cpu 16548     \l stk 0     \l fds 0     \l"  ]
+   16 ->  17     [ label = " num 1     \l cpu 16872     \l stk 0     \l fds 0     \l"  ]
+   17 ->  18     [ label = " num 1     \l cpu 16228     \l stk 0     \l fds 0     \l"  ]
+   18 ->  19     [ label = " num 1     \l cpu 25120     \l stk 96     \l fds 0     \l"  ]
+   19 ->  20     [ label = " num 1     \l cpu 34580     \l stk 0     \l fds 0     \l"  ]
+   20 ->  21     [ label = " num 1     \l cpu 16260     \l stk 0     \l fds 0     \l"  ]
+   21 ->  22     [ label = " num 1     \l cpu 16960     \l stk 0     \l fds 0     \l"  ]
+   22 ->  23     [ label = " num 1     \l cpu 15892     \l stk 0     \l fds 0     \l"  ]
+   23 ->  24     [ label = " num 1     \l cpu 15564     \l stk 0     \l fds 0     \l"  ]
+   24 ->  25     [ label = " num 1     \l cpu 16472     \l stk 0     \l fds 0     \l"  ]
+   25 ->  26     [ label = " num 1     \l cpu 653880     \l stk -8496     \l fds 0     \l"  color=green ]
+   27 ->  28     [ label = " num 1     \l cpu 81127748     \l stk 240     \l fds 0     \l"  ]
+   27 ->  29     [ label = " num 1000     \l cpu 27489     \l stk 432     \l fds 0     \l"  ]
+   27 ->  30     [ label = " num 1     \l cpu 252684     \l stk 560     \l fds 0     \l"  ]
+   29 ->  32     [ label = " num 212671     \l cpu 4097     \l stk 96     \l fds 0     \l"  ]
+   30 ->  31     [ label = " num 45162     \l cpu 64914     \l stk -128     \l fds 0     \l"  color=green ]
+   31 ->  30     [ label = " num 45162     \l cpu 22278     \l stk 128     \l fds 0     \l"  ]
+   31 ->  37     [ label = " num 167509     \l cpu 34663     \l stk 48     \l fds 0     \l"  ]
+   32 ->  33     [ label = " num 27563     \l cpu 51787     \l stk 848     \l fds 0     \l"  ]
+   32 ->  29     [ label = " num 21215     \l cpu 5679     \l stk -96     \l fds 0     \l"  color=green ]
+   32 ->  38     [ label = " num 113135     \l cpu 5334     \l stk -80     \l fds 0     \l"  color=green ]
+   32 ->  34     [ label = " num 50758     \l cpu 214290     \l stk 9520     \l fds 0     \l"  ]
+   33 ->  29     [ label = " num 1     \l cpu 114312     \l stk -944     \l fds 0     \l"  color=green ]
+   33 ->  36     [ label = " num 212668     \l cpu 57684     \l stk -176     \l fds 0     \l"  color=green ]
+   33 ->  34     [ label = " num 1111897     \l cpu 196851     \l stk 946     \l fds 0     \l"  ]
+   34 ->  35     [ label = " num 1273366     \l cpu 100335     \l stk 1078     \l fds 0     \l"  ]
+   35 ->  33     [ label = " num 1273366     \l cpu 27026     \l stk 368     \l fds 0     \l"  ]
+   36 ->  29     [ label = " num 142058     \l cpu 82145     \l stk -768     \l fds 0     \l"  color=green ]
+   36 ->  38     [ label = " num 70612     \l cpu 88263     \l stk -752     \l fds 0     \l"  color=green ]
+   36 ->  36     [ label = " num 5     \l cpu 164148     \l stk 0     \l fds 0     \l"  ]
+   37 ->  31     [ label = " num 167509     \l cpu 4618     \l stk -48     \l fds 0     \l"  color=green ]
+   38 ->  33     [ label = " num 23637     \l cpu 47980     \l stk 928     \l fds 0     \l"  ]
+   38 ->  29     [ label = " num 49397     \l cpu 4594     \l stk -16     \l fds 0     \l"  color=green ]
+   38 ->  34     [ label = " num 110711     \l cpu 220290     \l stk 9600     \l fds 0     \l"  ]
+   38 ->  36     [ label = " num 2     \l cpu 83660     \l stk 752     \l fds 0     \l"  ]
+}
+

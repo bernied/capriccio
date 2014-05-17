@@ -1,0 +1,70 @@
+#-*-makefile-*-
+######################################################################
+#
+# General build options
+#
+# This file defines variables that control how the libraries should be
+# built on your machine.  The purpose is to allow developers to easily
+# use machines that do not have the requisite kernel patches
+# installed.
+#
+# Usage
+#    1.  copy this file to Make.opts, in this directory
+#    2.  edit Make.opts, to define the right options for your machine
+#
+######################################################################
+
+##################################################
+# Debugging options
+##################################################
+
+#
+# Add all files for which you want debugging turned on to DEBUGFILES.
+# For example:
+#   DEBUGFILES = threadlib.c blocking_graph.c
+#
+
+##################################################
+# I/O library selection
+##################################################
+
+# default is 'aio'
+# uncomment the following to use 'nio', which needs Feng's extended epoll
+# kernel patch
+
+# USE_IO_LIB = nio
+
+
+##################################################
+# AIO library options
+##################################################
+
+# define this if your kernel supports epoll
+#HAVE_SYS_EPOLL = 1
+
+# define this if your kernel supports aio
+#HAVE_AIO = 1
+
+
+##################################################
+# General compiler options.  The defaults are 
+# shown below
+##################################################
+
+# define this to add turn on compiler optimizations
+# NOTE: -fomit-frame-pointer will mess up the CIL stack tricks
+# setting -DOPTIMIZE=2 will turn off most assertions/sanity checks
+# Other possible definitions: BG_NO_STACK_TRACE, NO_TIMING
+#OPTIMIZE = -O2 -fomit-frame-pointer -DOPTIMIZE=2 -DNO_TIMING
+OPTIMIZE = -O0 -g
+
+# other defines
+# do additional timing along graph edges 
+# -DSHOW_EDGE_TIMES
+
+# define this if you want to use perfctr to do timing
+#USE_PERFCTR = 1
+
+# define this to turn on generation of gprof output files
+#GPROF = -pg -fprofile-arcs
+

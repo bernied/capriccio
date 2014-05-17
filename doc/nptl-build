@@ -1,0 +1,26 @@
+
+NPTL building notes
+
+. Added one line to include/linux/sysctl.h of 2.6.0-test1 source
+  #include <linux/compiler.h>
+
+. Extract nptl-0.53 under glibc CVS version (20030715)
+
+. Configure glibc in a separate build directory with,
+../libc/configure --with-tls --prefix=/opt/testing --enable-add-ons=nptl
+--disable-profile --without-gd --with-__thread
+
+. make install   (make sure the --prefix above is writable)
+
+. Command line to run programs with nptl
+  cp <glibc build dir>/elf/ld.so /opt/testing/bin
+  /opt/testing/bin/ld.so --library-path /opt/testing/lib <program> <args>
+  
+
+-- obsolete info --
+. (XXX) kernel headers > 2.5.70 are not working, using 2.4.20 headers
+  http://archive.linuxfromscratch.org/mail-archives/lfs-support/2003/06/0319.html
+  2.4.20 headers are not working either
+
+
+${Id}

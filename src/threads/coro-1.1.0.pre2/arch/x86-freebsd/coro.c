@@ -1,0 +1,205 @@
+/*
+    Coroutine implementation for x86/FreeBSD, gcc-2.7.2
+
+    Copyright 1999 by E. Toernig <froese@gmx.de>
+    Copyright 1999 by S. Rushing <rushing@nightmare.com>
+    Copyright 2000 by K. Yancey <kbyanc@posi.net>
+*/
+
+#include <unistd.h>
+#include <stdarg.h>
+#include <sys/mman.h>
+#include "coro.h"
+
+#if !defined(i386)
+#error For x86-CPUs only
+#endif
+
+#if !defined(__GNUC__)
+#warning May break without gcc.  Be careful.
+#endif
+
+/* asm-name for identifier x */
+#if __FreeBSD_version >= 400000
+#define _(x) #x
+#else
+#define _(x) "_"#x
+#endif
+
+struct coroutine co_main[1] = { { 0 } };
+struct coroutine *co_current = co_main;
+
+
+#define fatal(msg) \
+    for (;;)						\
+    {							\
+	write(2, "coro: " msg "\r\n", sizeof(msg)+7);	\
+	*(unsigned int *)0 = 0xfee1dead;		\
+    }
+
+
+
+/*
+    Create new coroutine.
+    'func' is the entry point
+    'stack' is the start of the coroutines stack.  if 0, one is allocated.
+    'size' is the size of the stack
+*/
+
+
+static void wrap(void *data) __attribute__((noreturn,regparm(1)));
+
+static void
+wrap(void *data) /* arg in %eax! */
+{
+    co_current->resumeto = co_current->caller;
+
+    for (;;)
+	data = co_resume(co_current->func(data));
+}
+
+struct coroutine *
+co_create(void *func, void *stack, int size)
+{
+    struct coroutine *co;
+    int to_free = 0;
+
+    if (size < 128)
+	return 0;
+
+    if (stack == 0)
+    {
+	size += 4096-1;
+	size &= ~(4096-1);
+	stack = mmap(0, size, PROT_READ|PROT_WRITE,
+			      MAP_PRIVATE|MAP_ANON, -1, 0);
+	if (stack == (void*)-1)
+	    return 0;
+
+	to_free = size;
+    }
+    co = stack + size;
+    (unsigned long)co &= ~3;
+    co -= 1;
+
+    co->sp = co;
+    co->caller = 0;
+    co->resumeto = 0;
+    co->user = 0;
+    co->func = func;
+    co->to_free = to_free;
+
+    *--(void **)co->sp = wrap;		// return addr (here: start addr)
+    *--(void **)co->sp = 0;		// ebp
+    *--(void **)co->sp = 0;		// ebx
+    *--(void **)co->sp = 0;		// esi
+    *--(void **)co->sp = 0;		// edi
+    return co;
+}
+
+
+
+/*
+    delete a coroutine.
+*/
+
+void
+co_delete(struct coroutine *co)
+{
+    if (co == co_current)
+	fatal("coroutine deletes itself");
+
+    if (co->to_free)
+	munmap((void *)co + sizeof(*co) - co->to_free, co->to_free);
+}
+
+
+
+/*
+    delete self and switch to 'new_co' passing 'data'
+*/
+
+static void *helper_args[2];
+
+static void
+del_helper(void **args)
+{
+    for (;;)
+    {
+	if (args != helper_args)
+	    fatal("resume to deleted coroutine");
+	co_delete(co_current->caller);
+	args = co_call(args[0], args[1]);
+    }
+}
+
+void
+co_exit_to(struct coroutine *new_co, void *data)
+{
+    static struct coroutine *helper = 0;
+    static char stk[512]; // enough for a kernel call and a signal handler
+
+    helper_args[0] = new_co;
+    helper_args[1] = data;
+
+    if (helper == 0)
+	helper = co_create(del_helper, stk, sizeof(stk));
+
+    // we must leave this coroutine.  so call the helper.
+    co_call(helper, helper_args);
+    fatal("stale coroutine called");
+}
+
+void
+co_exit(void *data)
+{
+    co_exit_to(co_current->resumeto, data);
+}
+
+
+
+/*
+    Call other coroutine.
+    'new_co' is the coroutine to switch to
+    'data' is passed to the new coroutine
+*/
+
+//void *co_call(struct coroutine *new_co, void *data) { magic }
+asm(	".text"				);
+asm(	".align 16"			);
+asm(	".globl "_(co_call)		);
+asm(	".type "_(co_call)",@function"	);
+asm(	_(co_call)":"			);
+
+asm(	"pushl %ebp"			);	// save reg-vars/framepointer
+asm(	"pushl %ebx"			);
+asm(	"pushl %esi"			);
+asm(	"pushl %edi"			);
+
+asm(	"movl "_(co_current)",%eax"	);	// get old co
+asm(	"movl %esp,(%eax)"		);	// save sp of old co
+
+asm(	"movl 20(%esp),%ebx"		);	// get new co (arg1)
+asm(	"movl %ebx,"_(co_current)	);	// set as current
+asm(	"movl %eax,4(%ebx)"		);	// save caller
+asm(	"movl 24(%esp),%eax"		);	// get data (arg2)
+asm(	"movl (%ebx),%esp"		);	// restore sp of new co
+
+asm(	"popl %edi"			);	// restore reg-vars/frameptr
+asm(	"popl %esi"			);
+asm(	"popl %ebx"			);
+asm(	"popl %ebp"			);
+asm(	"ret"				);	// return to new coro
+
+asm(	"1:"				);
+asm(	".size "_(co_call)",1b-"_(co_call));
+
+
+
+void *
+co_resume(void *data)
+{
+    data = co_call(co_current->resumeto, data);
+    co_current->resumeto = co_current->caller;
+    return data;
+}

@@ -1,0 +1,16 @@
+#!/bin/sh
+#
+# Sample testarch script.
+#
+# Has to be made executable and return without error if it detects it's system.
+#
+# Note: this script is started on every architecture.  Make sure, it uses only
+# portable elements or really generates an error.
+#
+
+# abort if something fails
+set -e
+
+# One method to detect your system: uname
+SYS=`uname -sm`
+test "$SYS" = "Linux i586"

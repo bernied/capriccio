@@ -1,0 +1,17 @@
+#-*-makefile-*-
+
+#HAVE_SYS_EPOLL = 1
+#HAVE_AIO = 1
+#USE_PERFCTR = 1
+
+#OPTIMIZE = -O2 -finline-functions -Winline
+#OPTIMIZE = -O2 -finline-functions
+OPTIMIZE = -O0 -g
+
+
+DEBUGFILES := 
+#DEBUGFILES += sched_global_rr.c
+#DEBUGFILES = threadlib.c blocking_graph.c blocking_io.c
+
+
+#USE_IO_LIB = nio

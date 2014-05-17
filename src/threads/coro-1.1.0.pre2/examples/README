@@ -1,0 +1,9 @@
+I've put some coroutine examples in this directory.
+
+pipes.c
+    Shows coroutines building a pipeline of processing stages.
+
+cothread.c
+    A simple (but IMO useable) cooperative multi-threading environment.
+
+More to come...

@@ -1,0 +1,90 @@
+#!/usr/bin/perl
+######################################################################
+#
+#  Parse edge timing info, from a Capriccio debug dump file.  The 
+#  expected format for the data is as follows:
+#
+#  bg timingtimes to update bg node 2:   20360   (0 ms)
+#   0 -> 2     34804 ticks  (0 ms)
+#  bg timingtimes to update bg node 3:   6916   (0 ms)
+#   2 -> 3     991652 ticks  (0 ms)
+#  bg timingtimes to update bg node 4:   5876   (0 ms)
+#   0 -> 4     15836 ticks  (0 ms)
+#
+# NOTE1: enable edge timings w/ -DSHOW_EDGE_TIMES
+# 
+# NOTE2: this script probably doesn't work at present, as the debug
+# messages have changed!!!
+#
+######################################################################
+use strict;
+
+my %edge = ();
+my %node = ();
+
+while (<>) {
+    
+    # edge ticks
+    if (/^\s*(\d+\s*->\s*\d+)\s+(\d+)\s+ticks/) {
+        push @{$edge{$1}}, 0+$2;
+        next;
+    }
+
+    # times for BG node stats
+    if (/to update bg node (\d+): *(\d+)/) {
+        push @{$node{$1}}, 0+$2;
+        next;
+    }
+}
+
+
+print "*" x 70, "\n";
+foreach my $e (sort keys %edge) {
+    print "time on edge:  $e\n";
+    my $prev = -1;
+    my $count = 1;
+    my $ticks = 0;
+    foreach $ticks ( sort {$b <=> $a} @{$edge{$e}} ) {
+        $ticks = int($ticks / 1000);
+        if ($prev == $ticks) {
+            $count++;
+        } elsif ($prev != -1) {
+            print "    ", $ticks*1000, "  x $count\n";
+            $count = 1;
+        }
+        $prev = $ticks;
+    }
+    print "    ", $prev*1000, "  x $count\n" unless $prev == -1;
+    
+
+    print "\n\n";
+}
+
+
+
+print "*" x 70, "\n";
+foreach my $n (sort keys %node) {
+    print "time to get stats for node $n\n";
+    my $prev = -1;
+    my $count = 1;
+    my $ticks = -1;
+    foreach $ticks ( sort {$b <=> $a} @{$node{$n}} ) {
+        $ticks = int($ticks / 100);
+        if ($prev == $ticks) {
+            $count++;
+        } elsif ($prev != -1) {
+            print "    ", $ticks*100, "  x $count\n";
+            $count = 1;
+        }
+        $prev = $ticks;
+    }
+    print "    ", $prev*100, "  x $count\n" unless $prev == -1;
+    print "\n\n";
+}
+
+
+
+
+
+
+

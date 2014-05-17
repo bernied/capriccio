@@ -1,0 +1,22 @@
+CFLAGS=-O2 -Wall
+
+MAN=/tmp/capriccio/src/threads/coro-1.1.0.pre2/coro.man
+LINST=/usr/local/lib
+HINST=/usr/local/include
+MINST=/usr/local/man
+
+all: libcoro.a
+
+libcoro.a: coro.o
+	rm -f $@
+	ar rcs $@ coro.o
+
+coro.o: coro.h
+
+install: libcoro.a coro.h $(MAN)
+	install -m 644 libcoro.a $(LINST)/libcoro.a
+	install -m 644 coro.h $(HINST)/coro.h
+	install -m 644 $(MAN) $(MINST)/man2/coro.2
+
+clean:
+	rm -f libcoro.a coro.o

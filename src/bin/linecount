@@ -1,0 +1,23 @@
+#!/usr/bin/perl
+use strict;
+
+my $total = 0;
+
+foreach my $file (@ARGV) {
+    open(IN, "sed 's!^[ 	]*#!!' $file | cpp |") || die "error creating pipe for '$file': $!";
+    my $num=0;
+    while (<IN>) {
+        next if /^#/;          # strip line number directives
+        next if /^\s*$/;       # strip empty lines
+
+        next if /^[\s}{;]*$/;  # strip lines w/ only punctuation
+
+        $num++;
+    }
+    close IN;
+
+    print "$file\t$num\n";
+    $total += $num;
+}
+
+print "TOTAL:\t\t$total\n";

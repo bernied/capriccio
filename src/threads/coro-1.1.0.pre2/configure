@@ -1,0 +1,88 @@
+#!/bin/sh
+
+VERSION=1.1.0.pre2
+
+TOPDIR=`pwd`
+MAN=coro.man
+PREFIX=""
+LINST=""
+HINST=""
+MINST=""
+
+fatal() {
+    echo >&2 -e "$@"
+    exit 1
+}
+
+usage() {
+    exec >&2
+    echo
+    echo "usage: configure [options]"
+    echo
+    echo "options:"
+    echo "  --prefix <dir>   common installation prefix (/usr/local)"
+    echo "  --library <dir>  where to install the lib (\$PREFIX/lib)"
+    echo "  --include <dir>  where to install the header file (\$PREFIX/include)"
+    echo "  --manual <dir>   where to install the manual page (\$PREFIX/man)"
+    echo "  --arch <dir>     build for a specific architecture (auto detect)"
+    echo
+    echo "architectures:"
+    ls -dC arch/* | sed 's/^/  /'
+    echo
+    exit 1
+}
+
+while [ $# -gt 1 ] ; do
+    case "$1" in
+	--prefix)	PREFIX="$2"; shift 2;;
+	--library)	LINST="$2"; shift 2;;
+	--include)	HINST="$2"; shift 2;;
+	--manual)	MINST="$2"; shift 2;;
+	--arch)		ARCH="$2"; shift 2;;
+	*)		usage;;
+    esac
+done
+
+[ $# -ne 0 ] && usage
+
+[ -z "$ARCH" ] && {
+    for i in arch/*; do
+	[ -x $i/testarch ] && $i/testarch && ARCH="$ARCH $i"
+    done
+}
+
+set -- $ARCH
+[ $# -eq 0 ] && fatal "unable to detect system architecture"
+[ $# -gt 1 ] && fatal "multiple possible architectures detected: $*"
+[ ! -d "$1" ] && fatal "unknown architecture $1"
+
+ARCH=$1
+: ${PREFIX:=/usr/local}
+: ${LINST:=$PREFIX/lib}
+: ${HINST:=$PREFIX/include}
+: ${MINST:=$PREFIX/man}
+
+echo
+echo "top level build directory:          $TOPDIR"
+echo "building for architecture:          $ARCH"
+echo "installation dir for library:       $LINST"
+echo "installation dir for header file:   $HINST"
+echo "installation dir for manual page:   $MINST"
+echo
+
+for i in Makefile $ARCH/Makefile testing/Makefile examples/Makefile $MAN; do
+    [ -f $i.in ] && {
+	echo "creating $i..."
+	sed -e "s,@VERSION@,$VERSION,g" \
+	    -e "s,@TOPDIR@,$TOPDIR,g" \
+	    -e "s,@ARCH@,$TOPDIR/$ARCH,g" \
+	    -e "s,@MANSRC@,$TOPDIR/$MAN,g" \
+	    -e "s,@LINST@,$LINST,g" \
+	    -e "s,@HINST@,$HINST,g" \
+	    -e "s,@MINST@,$MINST,g" <$i.in >$i
+    }
+done
+
+echo "done."
+echo
+echo "next: 'make' or 'make test' or 'make install'"

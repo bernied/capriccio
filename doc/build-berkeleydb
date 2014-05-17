@@ -1,0 +1,11 @@
+
+1. cd capriccio/src; make
+2. cd db-XXXXXX/build_unix
+3. CAP=/path/to/capriccio/src; export CAP
+
+4a. CPPFLAGS="-I$CAP/include" LDFLAGS="-L$CAP/lib" NOTEST_LDDFLAGS="-all-static" CFLAGS="-DFD_SETSIZE=16384 -D__stub_semget -D__stub_semctl -D__stub_semop -O2 -lcrypt -pthread" ../dist/configure --enable-java
+
+4b. (enable tests)
+    CPPFLAGS="-I$CAP/include -I/usr/include/tcl8.3" LDFLAGS="-L$CAP/lib" NOTEST_LDDFLAGS="-all-static" CFLAGS="-DFD_SETSIZE=16384 -D__stub_semget -D__stub_semctl -D__stub_semop -O2 -lcrypt -pthread" ../dist/configure --enable-java --enable-tcl --enable-test --with-tcl=/usr/lib/tcl8.3
+
+5. make
