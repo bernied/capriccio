@@ -1,5 +1,0 @@
-
-eepoll-2.5.70.diff is a patch that enables epoll to deliver linux aio 
-completion events.  It is needed by the 'nio' i/o wrapping library of
-Capriccio.
-
