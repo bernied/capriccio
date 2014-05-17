@@ -47,13 +47,13 @@ int read_proc_file(int *fdp, char *name, char *buf, int len)
     }  */
   ret = syscall(SYS_read, fd, buf, len);
   // FIXME: fd caching seems to flake out someitmes - why??
-  close(fd);
+  syscall(SYS_close, fd);
   *fdp = -1;
 #endif
 
   if( ret < 50 ) {
     warning("too little data in %s (%d bytes)\n",name,ret);
-    if( fd >= 0 ) close(fd);
+    if( fd >= 0 ) syscall(SYS_close, fd);
     *fdp = -1;
     return -1;
   }
